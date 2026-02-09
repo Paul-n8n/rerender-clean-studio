@@ -111,6 +111,17 @@ def get_image(key: str):
     return Response(content=out.getvalue(), media_type="image/png")
 
 
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets", "p1")
+BG_DIR = os.path.join(ASSETS_DIR, "backgrounds")
+
+def load_bg(theme: str):
+    t = (theme or "yellow").lower()
+    path = os.path.join(BG_DIR, f"{t}.png")
+    if not os.path.exists(path):
+        path = os.path.join(BG_DIR, "yellow.png")
+    return Image.open(path).convert("RGBA")
+
+
 @app.get("/render/p1")
 def render_p1(
     key: str = Query(..., description="R2 object key, e.g. raw/TEST-001/original.png"),
