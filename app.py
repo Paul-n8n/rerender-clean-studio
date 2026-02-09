@@ -167,7 +167,7 @@ def render_p1(
     # 3) Layout constants
     pad = 56
     header_h = 220  # top area reserved for brand/model + chips
-    hero_box = (pad, header_h, W - pad, H - pad)
+    hero_box = (0, header_h, W, H)
 
     # 4) Brand + Model text
     title = f"{brand} {model}".strip()
@@ -217,8 +217,8 @@ def render_p1(
     margin_right = 0
     margin_bottom = 0
 
-    px = W - pad - new_w - margin_right
-    py = H - pad - new_h - margin_bottom
+    px = W - new_w
+    py = H - new_h
 
     # safety: don't go above header
     py = max(py, header_h)
