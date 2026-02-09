@@ -199,22 +199,29 @@ except Exception as e:
 
         chip_x = bx1 + chip_gap
 
-    # 6) Fit hero into hero_box
-    box_w = hero_box[2] - hero_box[0]
-    box_h = hero_box[3] - hero_box[1]
+  # 6) Place hero: bigger + lower-right anchor
+box_w = hero_box[2] - hero_box[0]
+box_h = hero_box[3] - hero_box[1]
 
-    # scale-to-fit, keep aspect
-    hero_w, hero_h = hero.size
-    scale = min(box_w / hero_w, box_h / hero_h)
-    new_w = max(1, int(hero_w * scale))
-    new_h = max(1, int(hero_h * scale))
-    hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
+hero_w, hero_h = hero.size
 
-    # center in hero box
-    px = hero_box[0] + (box_w - new_w) // 2
-    py = hero_box[1] + (box_h - new_h) // 2
+# Make it bigger than "fit" (1.15–1.35 is typical). Tune this.
+boost = 1.7
 
-    canvas.alpha_composite(hero_rs, (px, py))
+scale = min(box_w / hero_w, box_h / hero_h) * boost
+new_w = max(1, int(hero_w * scale))
+new_h = max(1, int(hero_h * scale))
+hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
+
+# Anchor to lower-right inside hero_box (not centered)
+right_pad = 40   # distance from right edge
+bottom_pad = 40  # distance from bottom edge
+
+px = hero_box[2] - new_w - right_pad
+py = hero_box[3] - new_h - bottom_pad
+
+canvas.alpha_composite(hero_rs, (px, py))
+
 
 
     # 7) Output PNG
