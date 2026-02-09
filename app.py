@@ -108,7 +108,7 @@ def get_image(key: str):
         raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
 
     out = BytesIO()
-    img.save(out, format="PNG")
+    hero.save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
 
 
@@ -155,9 +155,10 @@ def render_p1(
     # 1) Load hero image from R2
     data = r2_get_object_bytes(key)
     try:
-        hero = Image.open(BytesIO(data)).convert("RGBA")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Hero image invalid: {e}")
+    hero = Image.open(BytesIO(data)).convert("RGBA")
+    hero = trim_transparent(hero, pad=6)
+except Exception as e:
+    raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
 
     # 2) Create canvas
     W, H = 1000, 1000
