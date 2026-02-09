@@ -212,6 +212,8 @@ def render_p1(
     chip_y = int(H * 0.68)            # move down near reel (tweak 0.65~0.75)
 
 
+draw.text((pad, int(H*0.68) - 30), "CHIPS HERE", font=load_font(24), fill=(255, 0, 0, 255))
+    
     for c in chips:
         if not c:
             continue
@@ -222,7 +224,7 @@ def render_p1(
 
         # wrap to next line if overflow
         if chip_x + bw > chip_right_limit:
-            chip_x = header_left
+            chip_x = pad
             chip_y += bh + chip_gap_y
 
         bx0 = chip_x
