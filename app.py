@@ -182,21 +182,20 @@ def render_p1(
     # hero area starts below header
     hero_box = (0, header_h, W, H)
 
-    # 4) Brand (big)
+    # 4) Brand (small)
     brand_text = (brand or "").strip()
-    brand_font = fit_text(draw, brand_text, max_w=header_max_w, start_size=92, min_size=48)
+    brand_font = fit_text(draw, brand_text, max_w=header_max_w, start_size=44, min_size=24)
     bx, by = header_left, header_top
     draw.text((bx, by), brand_text, font=brand_font, fill=(20, 20, 20, 255))
-
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
-    # 4b) Model (subheader, below brand)
+    # 4b) Model (big, below brand)
     model_text = (model or "").strip()
     model_y = by + brand_h + 6
-    model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=68, min_size=34)
+    model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=96, min_size=44)
     draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
-
     model_h = text_size(draw, model_text, model_font)[1]
+
 
     # 5) Chips row (auto-wrap) below model
     chips = [chip1, chip2, chip3]
@@ -208,9 +207,10 @@ def render_p1(
     chip_pad_y = 12
     chip_radius = 18
 
-    chip_x = header_left
-    chip_y = model_y + model_h + 16
-    chip_right_limit = header_right
+    chip_x = pad                      # left margin
+    chip_right_limit = int(W * 0.62)  # limit width so it doesn't hit reel
+    chip_y = int(H * 0.68)            # move down near reel (tweak 0.65~0.75)
+
 
     for c in chips:
         if not c:
