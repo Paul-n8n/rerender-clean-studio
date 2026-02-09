@@ -10,6 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 app = FastAPI()
 
+VERSION = "P1 v2026-02-09A"
+
 
 # ---------- R2 client ----------
 def r2_client():
@@ -90,7 +92,7 @@ def fit_text(draw: ImageDraw.ImageDraw, text: str, max_w: int, start_size: int, 
 # ---------- Routes ----------
 @app.get("/health")
 def health():
-    return {"ok": True}
+    return {"ok": True, "version": VERSION}
 
 
 @app.get("/r2/get-image")
