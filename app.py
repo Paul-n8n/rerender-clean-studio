@@ -130,6 +130,7 @@ def render_p1(
     chip1: str = Query("3BB"),
     chip2: str = Query("5.1:1"),
     chip3: str = Query("Max Drag 8kg"),
+    theme: str = Query("yellow"),
 ):
     """
     Shopee P1 (1000x1000) compositor.
@@ -143,7 +144,7 @@ def render_p1(
 
     # 2) Create canvas
     W, H = 1000, 1000
-    canvas = Image.new("RGBA", (W, H), (255, 255, 255, 255))
+    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw = ImageDraw.Draw(canvas)
 
     # 3) Layout constants
