@@ -100,7 +100,6 @@ def get_image(key: str):
     Example key: raw/TEST-001/original.png
     """
     data = r2_get_object_bytes(key)
-
     try:
         hero = Image.open(BytesIO(data)).convert("RGBA")
         hero = trim_transparent(hero, pad=6)
@@ -216,6 +215,7 @@ except Exception as e:
     py = hero_box[1] + (box_h - new_h) // 2
 
     canvas.alpha_composite(hero_rs, (px, py))
+
 
     # 7) Output PNG
     out = BytesIO()
