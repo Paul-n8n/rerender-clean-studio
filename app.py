@@ -163,6 +163,9 @@ def render_p1(
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw = ImageDraw.Draw(canvas)
 
+    # DEBUG: version stamp (remove later)
+    draw.text((10, 960), "P1 v2026-02-09A", font=load_font(24), fill=(255, 0, 0, 255))
+
     # 3) Layout constants (Header zone)
     pad = 56
     top_pad = 44
