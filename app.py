@@ -163,40 +163,68 @@ def render_p1(
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw = ImageDraw.Draw(canvas)
 
-    # 3) Layout constants
+    # 3) Layout constants (Header zone)
     pad = 56
-    header_h = 220  # top area reserved for brand/model + chips
+    top_pad = 44
+    header_h = 240  # slightly taller header for better breathing room
+
+    # We'll keep header content on the LEFT so it never fights with the hero
+    header_left = pad
+    header_top = top_pad
+    header_right = int(W * 0.78)   # limit header width (tweak 0.75~0.82)
+    header_max_w = header_right - header_left
+
+    # hero area starts below header
     hero_box = (0, header_h, W, H)
 
-    # 4) Brand + Model text
+    # 4) Brand + Model (Title)
     title = f"{brand} {model}".strip()
-    title_font = fit_text(draw, title, max_w=W - pad * 2, start_size=72, min_size=34)
 
-    tx, ty = pad, 40
+    # Bigger + bold feel (fit to header_max_w)
+    title_font = fit_text(draw, title, max_w=header_max_w, start_size=86, min_size=44)
+
+    tx, ty = header_left, header_top
     draw.text((tx, ty), title, font=title_font, fill=(20, 20, 20, 255))
 
-    # 5) Chips row
-    chips: List[str] = [chip1, chip2, chip3]
-    chip_font = load_font(34)
-    chip_y = ty + text_size(draw, title, title_font)[1] + 22
-    chip_gap = 14
-    chip_x = pad
+    # 5) Chips row (auto-wrap)
+    chips = [chip1, chip2, chip3]
+    chip_font = load_font(38)
+
+    title_h = text_size(draw, title, title_font)[1]
+    chip_y = ty + title_h + 18
+
+    chip_gap_x = 14
+    chip_gap_y = 14
+    chip_pad_x = 18
+    chip_pad_y = 12
+    chip_radius = 18
+
+    chip_x = header_left
+    chip_right_limit = header_right
 
     for c in chips:
         if not c:
             continue
+
         tw, th = text_size(draw, c, chip_font)
+        bw = tw + chip_pad_x * 2
+        bh = th + chip_pad_y * 2
+
+        # wrap to next line if this chip would overflow the header width
+        if chip_x + bw > chip_right_limit:
+            chip_x = header_left
+            chip_y += bh + chip_gap_y
+
         bx0 = chip_x
         by0 = chip_y
-        bx1 = chip_x + tw + 26
-        by1 = chip_y + th + 16
+        bx1 = chip_x + bw
+        by1 = chip_y + bh
 
-        # light gray chip
-        draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=18, fill=(245, 246, 248, 255))
-        # chip text
-        draw.text((bx0 + 13, by0 + 8), c, font=chip_font, fill=(40, 40, 40, 255))
+        draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=chip_radius, fill=(245, 246, 248, 255))
+        draw.text((bx0 + chip_pad_x, by0 + chip_pad_y), c, font=chip_font, fill=(40, 40, 40, 255))
 
-        chip_x = bx1 + chip_gap
+        chip_x = bx1 + chip_gap_x
+
 
     # 6) Make hero big + anchor to lower-right
     box_w = hero_box[2] - hero_box[0]
