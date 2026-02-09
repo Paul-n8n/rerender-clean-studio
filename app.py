@@ -166,32 +166,36 @@ def render_p1(
     # 3) Layout constants (Header zone)
     pad = 56
     top_pad = 44
-    header_h = 240  # slightly taller header for better breathing room
+    header_h = 260  # enough room for brand + model + chips (tweak 240~300)
 
-    # We'll keep header content on the LEFT so it never fights with the hero
+    # keep header on the LEFT so it never fights with the hero
     header_left = pad
     header_top = top_pad
-    header_right = int(W * 0.78)   # limit header width (tweak 0.75~0.82)
+    header_right = int(W * 0.72)   # header content width limit (tweak 0.68~0.78)
     header_max_w = header_right - header_left
 
     # hero area starts below header
     hero_box = (0, header_h, W, H)
 
-    # 4) Brand + Model (Title)
-    title = f"{brand} {model}".strip()
+    # 4) Brand (big)
+    brand_text = (brand or "").strip()
+    brand_font = fit_text(draw, brand_text, max_w=header_max_w, start_size=92, min_size=48)
+    bx, by = header_left, header_top
+    draw.text((bx, by), brand_text, font=brand_font, fill=(20, 20, 20, 255))
 
-    # Bigger + bold feel (fit to header_max_w)
-    title_font = fit_text(draw, title, max_w=header_max_w, start_size=86, min_size=44)
+    brand_h = text_size(draw, brand_text, brand_font)[1]
 
-    tx, ty = header_left, header_top
-    draw.text((tx, ty), title, font=title_font, fill=(20, 20, 20, 255))
+    # 4b) Model (subheader, below brand)
+    model_text = (model or "").strip()
+    model_y = by + brand_h + 6
+    model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=68, min_size=34)
+    draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
 
-    # 5) Chips row (auto-wrap)
+    model_h = text_size(draw, model_text, model_font)[1]
+
+    # 5) Chips row (auto-wrap) below model
     chips = [chip1, chip2, chip3]
     chip_font = load_font(38)
-
-    title_h = text_size(draw, title, title_font)[1]
-    chip_y = ty + title_h + 18
 
     chip_gap_x = 14
     chip_gap_y = 14
@@ -200,6 +204,7 @@ def render_p1(
     chip_radius = 18
 
     chip_x = header_left
+    chip_y = model_y + model_h + 16
     chip_right_limit = header_right
 
     for c in chips:
@@ -210,7 +215,7 @@ def render_p1(
         bw = tw + chip_pad_x * 2
         bh = th + chip_pad_y * 2
 
-        # wrap to next line if this chip would overflow the header width
+        # wrap to next line if overflow
         if chip_x + bw > chip_right_limit:
             chip_x = header_left
             chip_y += bh + chip_gap_y
@@ -224,7 +229,6 @@ def render_p1(
         draw.text((bx0 + chip_pad_x, by0 + chip_pad_y), c, font=chip_font, fill=(40, 40, 40, 255))
 
         chip_x = bx1 + chip_gap_x
-
 
     # 6) Make hero big + anchor to lower-right
     box_w = hero_box[2] - hero_box[0]
