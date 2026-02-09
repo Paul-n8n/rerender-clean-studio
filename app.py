@@ -206,7 +206,7 @@ def render_p1(
     hero_w, hero_h = hero.size
 
     # target size: fill ~88% of available height (tweak 0.88 -> 0.92 if you want even bigger)
-    target_h = int(box_h * 0.88)
+    target_h = int(box_h * 0.92)
     scale = target_h / hero_h
 
     new_w = max(1, int(hero_w * scale))
@@ -215,7 +215,7 @@ def render_p1(
 
     # anchor lower-right with margins
     margin_right = 10
-    margin_bottom = 10
+    margin_bottom = 20
 
     px = hero_box[2] - new_w - margin_right
     py = hero_box[3] - new_h - margin_bottom
