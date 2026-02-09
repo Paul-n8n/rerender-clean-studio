@@ -152,7 +152,6 @@ def render_p1(
     Shopee P1 (1000x1000) compositor.
     """
     # 1) Load hero image from R2
-        # 1) Load hero image from R2
     data = r2_get_object_bytes(key)
     try:
         hero = Image.open(BytesIO(data)).convert("RGBA")
