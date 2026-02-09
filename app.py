@@ -153,7 +153,7 @@ def render_p1(
     """
     # 1) Load hero image from R2
     data = r2_get_object_bytes(key)
-    try:
+try:
     hero = Image.open(BytesIO(data)).convert("RGBA")
     hero = trim_transparent(hero, pad=6)
 except Exception as e:
