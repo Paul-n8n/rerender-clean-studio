@@ -152,12 +152,13 @@ def render_p1(
     Shopee P1 (1000x1000) compositor.
     """
     # 1) Load hero image from R2
+        # 1) Load hero image from R2
     data = r2_get_object_bytes(key)
-try:
-    hero = Image.open(BytesIO(data)).convert("RGBA")
-    hero = trim_transparent(hero, pad=6)
-except Exception as e:
-    raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
+    try:
+        hero = Image.open(BytesIO(data)).convert("RGBA")
+        hero = trim_transparent(hero, pad=6)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
 
     # 2) Create canvas
     W, H = 1000, 1000
@@ -199,30 +200,31 @@ except Exception as e:
 
         chip_x = bx1 + chip_gap
 
-  # 6) Place hero: bigger + lower-right anchor
-box_w = hero_box[2] - hero_box[0]
-box_h = hero_box[3] - hero_box[1]
+    # 6) Make hero big + anchor to lower-right
+    box_w = hero_box[2] - hero_box[0]
+    box_h = hero_box[3] - hero_box[1]
 
-hero_w, hero_h = hero.size
+    hero_w, hero_h = hero.size
 
-# Make it bigger than "fit" (1.15–1.35 is typical). Tune this.
-boost = 1.7
+    # target size: fill ~88% of available height (tweak 0.88 -> 0.92 if you want even bigger)
+    target_h = int(box_h * 0.88)
+    scale = target_h / hero_h
 
-scale = min(box_w / hero_w, box_h / hero_h) * boost
-new_w = max(1, int(hero_w * scale))
-new_h = max(1, int(hero_h * scale))
-hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
+    new_w = max(1, int(hero_w * scale))
+    new_h = max(1, int(hero_h * scale))
+    hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-# Anchor to lower-right inside hero_box (not centered)
-right_pad = 40   # distance from right edge
-bottom_pad = 40  # distance from bottom edge
+    # anchor lower-right with margins
+    margin_right = 40
+    margin_bottom = 40
 
-px = hero_box[2] - new_w - right_pad
-py = hero_box[3] - new_h - bottom_pad
+    px = hero_box[2] - new_w - margin_right
+    py = hero_box[3] - new_h - margin_bottom
 
-canvas.alpha_composite(hero_rs, (px, py))
+    # safety: don't go above header
+    py = max(py, header_h)
 
-
+    canvas.alpha_composite(hero_rs, (px, py))
 
     # 7) Output PNG
     out = BytesIO()
