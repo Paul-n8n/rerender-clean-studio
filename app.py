@@ -213,12 +213,12 @@ def render_p1(
     new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # anchor lower-right with margins
+    # anchor to CANVAS bottom-right (within pad)
     margin_right = 0
-    margin_bottom = 10
+    margin_bottom = 0
 
-    px = hero_box[2] - new_w - margin_right
-    py = hero_box[3] - new_h - margin_bottom
+    px = W - pad - new_w - margin_right
+    py = H - pad - new_h - margin_bottom
 
     # safety: don't go above header
     py = max(py, header_h)
