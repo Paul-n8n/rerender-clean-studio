@@ -214,8 +214,8 @@ def render_p1(
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
     # anchor lower-right with margins
-    margin_right = 10
-    margin_bottom = 20
+    margin_right = 0
+    margin_bottom = 10
 
     px = hero_box[2] - new_w - margin_right
     py = hero_box[3] - new_h - margin_bottom
