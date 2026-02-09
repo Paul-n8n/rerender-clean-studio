@@ -192,6 +192,7 @@ def render_p1(
     # 4b) Model (BIG)
     model_text = (model or "").strip()
     model_y = by + brand_h + 6
+    model_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=130)
     model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=130, min_size=64)
     draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
@@ -213,19 +214,19 @@ def render_p1(
         if not c:
             continue
 
-    tw, th = text_size(draw, c, chip_font)
-    bw = tw + chip_pad_x * 2
-    bh = th + chip_pad_y * 2
+        tw, th = text_size(draw, c, chip_font)
+        bw = tw + chip_pad_x * 2
+        bh = th + chip_pad_y * 2
 
-    bx0 = chip_x
-    by0 = chip_y
-    bx1 = chip_x + bw
-    by1 = chip_y + bh
+        bx0 = chip_x
+        by0 = chip_y
+        bx1 = chip_x + bw
+        by1 = chip_y + bh
 
-    draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=chip_radius, fill=(245, 246, 248, 255))
-    draw.text((bx0 + chip_pad_x, by0 + chip_pad_y), c, font=chip_font, fill=(40, 40, 40, 255))
+        draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=chip_radius, fill=(245, 246, 248, 255))
+        draw.text((bx0 + chip_pad_x, by0 + chip_pad_y), c, font=chip_font, fill=(40, 40, 40, 255))
 
-    chip_y += bh + chip_gap_y
+        chip_y += bh + chip_gap_y
 
 
     # 6) Make hero big + anchor to lower-right
@@ -247,7 +248,7 @@ def render_p1(
     margin_bottom = 0
 
     px = W - new_w
-    py = H - new_h - 80
+    py = H - new_h - 10
 
     # safety: don't go above header
     py = max(py, header_h)
