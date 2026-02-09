@@ -102,7 +102,8 @@ def get_image(key: str):
     data = r2_get_object_bytes(key)
 
     try:
-        img = Image.open(BytesIO(data)).convert("RGBA")
+        hero = Image.open(BytesIO(data)).convert("RGBA")
+        hero = trim_transparent(hero, pad=6)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
 
@@ -121,6 +122,22 @@ def load_bg(theme: str):
         path = os.path.join(BG_DIR, "yellow.png")
     return Image.open(path).convert("RGBA")
 
+def trim_transparent(im: Image.Image, pad: int = 2) -> Image.Image:
+    """
+    Crops transparent border around an RGBA image.
+    pad keeps a tiny margin so it doesn't cut too tight.
+    """
+    if im.mode != "RGBA":
+        im = im.convert("RGBA")
+    bbox = im.getbbox()  # bbox of non-zero pixels (includes alpha)
+    if not bbox:
+        return im
+    x0, y0, x1, y1 = bbox
+    x0 = max(0, x0 - pad)
+    y0 = max(0, y0 - pad)
+    x1 = min(im.width, x1 + pad)
+    y1 = min(im.height, y1 + pad)
+    return im.crop((x0, y0, x1, y1))
 
 @app.get("/render/p1")
 def render_p1(
