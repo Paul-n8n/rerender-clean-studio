@@ -247,7 +247,7 @@ def render_p1(
     margin_bottom = 0
 
     px = W - new_w
-    py = H - new_h - 10
+    py = H - new_h - 80
 
     # safety: don't go above header
     py = max(py, header_h)
