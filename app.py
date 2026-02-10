@@ -61,6 +61,27 @@ def load_font(size: int) -> ImageFont.FreeTypeFont:
             pass
     return ImageFont.load_default()
 
+def load_font_regular(size: int) -> ImageFont.FreeTypeFont:
+    for path in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+def load_font_bold(size: int) -> ImageFont.FreeTypeFont:
+    for path in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ]:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+
 
 # ---------- Drawing helpers ----------
 def draw_rounded_rect(draw: ImageDraw.ImageDraw, xy, radius: int, fill):
@@ -183,7 +204,7 @@ def render_p1(
 
     # 4) Brand (small, like "PIONEER")
     brand_text = (brand or "").strip().upper()
-    brand_font = fit_text(draw, brand_text, max_w=header_max_w, start_size=64, min_size=32)
+    brand_font = load_font_bold(64)   # fixed bold like RASCAL
     bx, by = header_left, header_top
     draw.text((bx, by), brand_text, font=brand_font, fill=(20, 20, 20, 255))
     brand_h = text_size(draw, brand_text, brand_font)[1]
@@ -192,8 +213,33 @@ def render_p1(
     model_text = (model or "").strip().upper()
     model_y = by + brand_h - 6   # tighter, like the reference
     model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=220, min_size=140)
+    model_font = load_font_bold(model_font.size if hasattr(model_font, "size") else 220)
     draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
+
+    # --- RASCAL-style top-right badge (use chip3) ---
+    badge_text = (chip3 or "").strip()
+    if badge_text:
+    badge_font = load_font_bold(44)
+
+    tw, th = text_size(draw, badge_text, badge_font)
+    pad_x = 26
+    pad_y = 14
+    bw = tw + pad_x * 2
+    bh = th + pad_y * 2
+
+    bx1 = W - pad
+    by0 = top_pad + 18
+    bx0 = bx1 - bw
+    by1 = by0 + bh
+
+    # yellow fill + black outline like RASCAL
+    try:
+        draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255), outline=(20, 20, 20, 255), width=4)
+    except Exception:
+        draw.rectangle((bx0, by0, bx1, by1), fill=(245, 204, 74, 255))
+
+    draw.text((bx0 + pad_x, by0 + pad_y), badge_text, font=badge_font, fill=(20, 20, 20, 255))
 
     
     # 6) Make hero big + anchor to lower-right
