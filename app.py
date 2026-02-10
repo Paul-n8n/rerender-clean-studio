@@ -11,10 +11,6 @@ from PIL import Image, ImageDraw, ImageFont
 app = FastAPI()
 
 VERSION = "P1 v2026-02-09A"
-# DEBUG: show received chip values
-dbg = f"c1={chip1} | c2={chip2} | c3={chip3}"
-draw.text((10, 930), dbg, font=load_font(20), fill=(255, 0, 0, 255))
-
 
 # ---------- R2 client ----------
 def r2_client():
@@ -179,59 +175,27 @@ def render_p1(
     # keep header on the LEFT so it never fights with the hero
     header_left = pad
     header_top = top_pad
-    header_right = int(W * 0.72)   # header content width limit (tweak 0.68~0.78)
+    header_right = int(W * 0.62)   # header content width limit (tweak 0.68~0.78)
     header_max_w = header_right - header_left
 
     # hero area starts below header
     hero_box = (0, header_h, W, H)
 
-    # 4) Brand (small)
-    brand_text = (brand or "").strip()
-    brand_font = fit_text(draw, brand_text, max_w=header_max_w, start_size=46, min_size=26)
+    # 4) Brand (small, like "PIONEER")
+    brand_text = (brand or "").strip().upper()
+    brand_font = fit_text(draw, brand_text, max_w=header_max_w, start_size=64, min_size=32)
     bx, by = header_left, header_top
     draw.text((bx, by), brand_text, font=brand_font, fill=(20, 20, 20, 255))
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
-    # 4b) Model (BIG)
-    model_text = (model or "").strip()
-    model_y = by + brand_h + 6
-    model_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=130)
-    model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=130, min_size=64)
+    # 4b) Model (HUGE, like "RASCAL")
+    model_text = (model or "").strip().upper()
+    model_y = by + brand_h - 6   # tighter, like the reference
+    model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=190, min_size=110)
     draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
 
-
-    # 5) Chips (VERTICAL stack near reel area)
-    chips = [chip1, chip2, chip3]
-    chip_font = load_font(38)
-
-    chip_gap_y = 18
-    chip_pad_x = 18
-    chip_pad_y = 12
-    chip_radius = 18
-
-    chip_x = pad                 # left margin
-    chip_y = int(H * 0.62)       # tweak 0.58~0.72 to match your reference
-
-    for c in chips:
-        if not c:
-            continue
-
-        tw, th = text_size(draw, c, chip_font)
-        bw = tw + chip_pad_x * 2
-        bh = th + chip_pad_y * 2
-
-        bx0 = chip_x
-        by0 = chip_y
-        bx1 = chip_x + bw
-        by1 = chip_y + bh
-
-        draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=chip_radius, fill=(245, 246, 248, 255))
-        draw.text((bx0 + chip_pad_x, by0 + chip_pad_y), c, font=chip_font, fill=(40, 40, 40, 255))
-
-        chip_y += bh + chip_gap_y
-
-
+    
     # 6) Make hero big + anchor to lower-right
     box_w = hero_box[2] - hero_box[0]
     box_h = hero_box[3] - hero_box[1]
@@ -251,12 +215,64 @@ def render_p1(
     margin_bottom = 0
 
     px = W - new_w
-    py = H - new_h - 10
+    py = int(H * 0.24)   # move up (tweak 0.24~0.34)
 
     # safety: don't go above header
     py = max(py, header_h)
 
     canvas.alpha_composite(hero_rs, (px, py))
+
+    # --- FIX 3: Feature chips (2 items) under/left area ---
+    features = [chip1, chip2]  # only 2 like RASCAL
+    chip_font = load_font(44)
+    chip_gap_y = 26
+    chip_pad_x = 22
+    chip_pad_y = 14
+    chip_radius = 18
+
+    chip_x = pad
+    chip_y = int(H * 0.68)  # tweak 0.64~0.74
+
+    for c in features:
+        if not c:
+            continue
+
+        tw, th = text_size(draw, c, chip_font)
+        bw = tw + chip_pad_x * 2
+        bh = th + chip_pad_y * 2
+
+        draw_rounded_rect(
+            draw,
+            (chip_x, chip_y, chip_x + bw, chip_y + bh),
+            radius=chip_radius,
+            fill=(245, 246, 248, 255)
+    )
+    draw.text(
+        (chip_x + chip_pad_x, chip_y + chip_pad_y),
+        c,
+        font=chip_font,
+        fill=(40, 40, 40, 255)
+    )
+
+    chip_y += bh + chip_gap_y
+
+    # --- FIX 4: Bottom CTA banner ---
+    cta_text = "READY STOCK • FAST SHIP"
+    cta_font = load_font(54)
+
+    tw, th = text_size(draw, cta_text, cta_font)
+    pad_x = 34
+    pad_y = 18
+    bw = tw + pad_x * 2
+    bh = th + pad_y * 2
+
+    bx0 = (W - bw) // 2
+    by0 = int(H * 0.86)   # tweak 0.84~0.90
+    bx1 = bx0 + bw
+    by1 = by0 + bh
+
+    draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=22, fill=(245, 204, 74, 255))
+    draw.text((bx0 + pad_x, by0 + pad_y), cta_text, font=cta_font, fill=(20, 20, 20, 255))
 
     # 7) Output PNG
     out = BytesIO()
