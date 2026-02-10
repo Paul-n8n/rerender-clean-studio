@@ -175,7 +175,7 @@ def render_p1(
     # keep header on the LEFT so it never fights with the hero
     header_left = pad
     header_top = top_pad
-    header_right = int(W * 0.62)   # header content width limit (tweak 0.68~0.78)
+    header_right = int(W * 0.78)   # header content width limit (tweak 0.68~0.78)
     header_max_w = header_right - header_left
 
     # hero area starts below header
@@ -191,7 +191,7 @@ def render_p1(
     # 4b) Model (HUGE, like "RASCAL")
     model_text = (model or "").strip().upper()
     model_y = by + brand_h - 6   # tighter, like the reference
-    model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=190, min_size=110)
+    model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=220, min_size=140)
     draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
 
@@ -231,21 +231,21 @@ def render_p1(
     chip_radius = 18
 
     chip_x = pad
-    chip_y = int(H * 0.68)  # tweak 0.64~0.74
+    chip_y = int(H * 0.74)  # tweak 0.64~0.74
 
     for c in features:
         if not c:
             continue
 
-        tw, th = text_size(draw, c, chip_font)
-        bw = tw + chip_pad_x * 2
-        bh = th + chip_pad_y * 2
+    tw, th = text_size(draw, c, chip_font)
+    bw = tw + chip_pad_x * 2
+    bh = th + chip_pad_y * 2
 
-        draw_rounded_rect(
-            draw,
-            (chip_x, chip_y, chip_x + bw, chip_y + bh),
-            radius=chip_radius,
-            fill=(245, 246, 248, 255)
+    draw_rounded_rect(
+        draw,
+        (chip_x, chip_y, chip_x + bw, chip_y + bh),
+        radius=chip_radius,
+        fill=(245, 246, 248, 255)
     )
     draw.text(
         (chip_x + chip_pad_x, chip_y + chip_pad_y),
@@ -267,7 +267,7 @@ def render_p1(
     bh = th + pad_y * 2
 
     bx0 = (W - bw) // 2
-    by0 = int(H * 0.86)   # tweak 0.84~0.90
+    by0 = int(H * 0.88)   # tweak 0.84~0.90
     bx1 = bx0 + bw
     by1 = by0 + bh
 
