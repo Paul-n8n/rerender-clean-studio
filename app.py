@@ -209,41 +209,25 @@ def render_p1(
     # hero area starts below header
     hero_box = (0, header_h, W, H)
 
-    # 4) Brand (small, like "PIONEER")
+    # 4) Brand (small, like "PIONEER") — REGULAR font
     brand_text = (brand or "").strip().upper()
     brand_font = fit_text(draw, brand_text, max_w=header_max_w, start_size=72, min_size=34)
 
     bx = header_left
     by = header_top
-    draw_text_align_left(draw, bx, by, brand_text, brand_font, (20, 20, 20, 255))
+
+    # Optical alignment nudge (fixes "protruding" look)
+    brand_x_nudge = 2
+    draw.text((bx + brand_x_nudge, by), brand_text, font=brand_font, fill=(20, 20, 20, 255))
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
-    # 4b) Model (HUGE, like "RASCAL") - aligned under brand
+    # 4b) Model (HUGE) — BOLD font
     model_text = (model or "").strip().upper()
     model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=240, min_size=140)
 
-    # tighter spacing than before
     model_y = by + brand_h - 10
-    draw_text_align_left(draw, bx, model_y, model_text, model_font, (20, 20, 20, 255))
+    draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
-
-    # --- Top-right size badge (chip3) ---
-    badge_text = (chip3 or "").strip()
-    if badge_text:
-        badge_font = load_font_bold(44)
-        pad_x, pad_y = 26, 14
-
-        tw, th = text_size(draw, badge_text, badge_font)
-        bw, bh = tw + pad_x * 2, th + pad_y * 2
-
-        bx1 = W - pad
-        by0 = top_pad + 18
-        bx0 = bx1 - bw
-        by1 = by0 + bh
-
-        draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255))
-        draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, outline=(20, 20, 20, 255), width=4)
-        draw.text((bx0 + pad_x, by0 + pad_y), badge_text, font=badge_font, fill=(20, 20, 20, 255))
 
     
     # 6) Make hero big + anchor to lower-right
