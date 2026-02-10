@@ -229,8 +229,6 @@ def render_p1(
     draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
 
-        model_h = text_size(draw, model_text, model_font)[1]
-
     # 5) Top-right size badge (chip3)
     size_text = (chip3 or "").strip()
     if size_text:
@@ -278,7 +276,7 @@ def render_p1(
     py = int(H * 0.22)   # move up (tweak 0.24~0.34)
 
 
-  # reserve space under the reel for chips + CTA (tweak 260 if needed)
+      # reserve space under the reel for chips + CTA (tweak 260 if needed)
     py = min(py, H - 340 - new_h)
     py = max(py, header_h)
 
