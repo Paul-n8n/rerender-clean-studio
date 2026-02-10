@@ -229,6 +229,32 @@ def render_p1(
     draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
 
+        # 5) Top-right size badge (chip3)
+        size_text = (chip3 or "").strip()
+        if size_text:
+            badge_font = load_font_bold(44)
+            pad_x, pad_y = 26, 14
+
+            tw, th = text_size(draw, size_text, badge_font)
+            bw, bh = tw + pad_x * 2, th + pad_y * 2
+
+            bx1 = W - pad
+            by0 = top_pad + 18
+            bx0 = bx1 - bw
+            by1 = by0 + bh
+
+            draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255))
+            draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, outline=(20, 20, 20, 255), width=4)
+
+            # center text inside badge
+            bbox = draw.textbbox((0, 0), size_text, font=badge_font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            tx = bx0 + (bw - text_w) // 2
+            ty = by0 + (bh - text_h) // 2 - 1
+            draw.text((tx, ty), size_text, font=badge_font, fill=(20, 20, 20, 255))
+
+
     
     # 6) Make hero big + anchor to lower-right
     box_w = hero_box[2] - hero_box[0]
@@ -253,7 +279,7 @@ def render_p1(
 
 
   # reserve space under the reel for chips + CTA (tweak 260 if needed)
-    py = min(py, H - 260 - new_h)
+    py = min(py, H - 340 - new_h)
     py = max(py, header_h)
 
     canvas.alpha_composite(hero_rs, (px, py))
@@ -291,11 +317,11 @@ def render_p1(
 
     # --- FIX 4: CTA BELOW chips, near bottom, bordered pill ---
     cta_text = "READY STOCK • FAST SHIP"
-    cta_font = load_font(44)
+    cta_font = load_font_bold(40)
 
     tw, th = text_size(draw, cta_text, cta_font)
-    cta_pad_x = 30
-    cta_pad_y = 14
+    cta_pad_x = 24
+    cta_pad_y = 10
     cta_w = tw + cta_pad_x * 2
     cta_h = th + cta_pad_y * 2
 
@@ -309,8 +335,12 @@ def render_p1(
 
     draw_rounded_rect(draw, (cta_x0, cta_y0, cta_x1, cta_y1), radius=18, fill=(245, 204, 74, 255))
     draw.rounded_rectangle((cta_x0, cta_y0, cta_x1, cta_y1), radius=18, outline=(20, 20, 20, 255), width=4)
-    draw.text((cta_x0 + cta_pad_x, cta_y0 + cta_pad_y), cta_text, font=cta_font, fill=(20, 20, 20, 255))
-
+    bbox = draw.textbbox((0, 0), cta_text, font=cta_font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    tx = cta_x0 + (cta_w - text_w) // 2
+    ty = cta_y0 + (cta_h - text_h) // 2 - 1
+    draw.text((tx, ty), cta_text, font=cta_font, fill=(20, 20, 20, 255))
 
 
     # 7) Output PNG
