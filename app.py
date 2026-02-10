@@ -108,6 +108,13 @@ def fit_text(draw: ImageDraw.ImageDraw, text: str, max_w: int, start_size: int, 
         size -= 2
     return load_font(min_size)
 
+def draw_text_align_left(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill):
+    # compensates for glyph left-bearing so visual left edges align
+    bbox = draw.textbbox((0, 0), text, font=font)
+    left_bearing = bbox[0]
+    draw.text((x - left_bearing, y), text, font=font, fill=fill)
+
+
 
 # ---------- Routes ----------
 @app.get("/health")
@@ -208,7 +215,7 @@ def render_p1(
 
     bx = header_left
     by = header_top
-    draw.text((bx, by), brand_text, font=brand_font, fill=(20, 20, 20, 255))
+    draw_text_align_left(draw, bx, by, brand_text, brand_font, (20, 20, 20, 255))
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
     # 4b) Model (HUGE, like "RASCAL") - aligned under brand
@@ -217,53 +224,26 @@ def render_p1(
 
     # tighter spacing than before
     model_y = by + brand_h - 10
-    draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
+    draw_text_align_left(draw, bx, model_y, model_text, model_font, (20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
 
-    # --- FIX: Size badge (use chip3) at top-right ---
-    size_text = (chip3 or "").strip()
-    if size_text:
-        badge_font = load_font(44)
-        pad_x, pad_y = 26, 14
-        tw, th = text_size(draw, size_text, badge_font)
-        bw, bh = tw + pad_x * 2, th + pad_y * 2
-
-        bx1 = W - pad
-        by0 = header_top + 10
-        bx0 = bx1 - bw
-        by1 = by0 + bh
-
-    # yellow fill + black border like RASCAL
-    draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255))
-    draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, outline=(20, 20, 20, 255), width=4)
-
-    draw.text((bx0 + pad_x, by0 + pad_y), size_text, font=badge_font, fill=(20, 20, 20, 255))
-
-
-
-    # --- RASCAL-style top-right badge (use chip3) ---
+    # --- Top-right size badge (chip3) ---
     badge_text = (chip3 or "").strip()
     if badge_text:
         badge_font = load_font_bold(44)
+        pad_x, pad_y = 26, 14
 
-    tw, th = text_size(draw, badge_text, badge_font)
-    pad_x = 26
-    pad_y = 14
-    bw = tw + pad_x * 2
-    bh = th + pad_y * 2
+        tw, th = text_size(draw, badge_text, badge_font)
+        bw, bh = tw + pad_x * 2, th + pad_y * 2
 
-    bx1 = W - pad
-    by0 = top_pad + 18
-    bx0 = bx1 - bw
-    by1 = by0 + bh
+        bx1 = W - pad
+        by0 = top_pad + 18
+        bx0 = bx1 - bw
+        by1 = by0 + bh
 
-    # yellow fill + black outline like RASCAL
-    try:
-        draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255), outline=(20, 20, 20, 255), width=4)
-    except Exception:
-        draw.rectangle((bx0, by0, bx1, by1), fill=(245, 204, 74, 255))
-
-    draw.text((bx0 + pad_x, by0 + pad_y), badge_text, font=badge_font, fill=(20, 20, 20, 255))
+        draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255))
+        draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, outline=(20, 20, 20, 255), width=4)
+        draw.text((bx0 + pad_x, by0 + pad_y), badge_text, font=badge_font, fill=(20, 20, 20, 255))
 
     
     # 6) Make hero big + anchor to lower-right
@@ -287,7 +267,9 @@ def render_p1(
     px = W - new_w
     py = int(H * 0.22)   # move up (tweak 0.24~0.34)
 
-    # safety: don't go above header
+
+  # reserve space under the reel for chips + CTA (tweak 260 if needed)
+    py = min(py, H - 260 - new_h)
     py = max(py, header_h)
 
     canvas.alpha_composite(hero_rs, (px, py))
@@ -298,8 +280,10 @@ def render_p1(
     hero_bottom = py + new_h
 
 
-    # --- FIX 3: Feature chips (chip1, chip2) to the LEFT of reel, near reel middle-lower ---
-    features = [chip1, chip2]
+    # --- FIX 3: Feature chips BELOW the reel (chip1, chip2) ---
+    features = [(chip1 or "").strip(), (chip2 or "").strip()]
+    features = [c for c in features if c]
+
     chip_font = load_font(46)
     chip_gap_y = 22
     chip_pad_x = 22
@@ -307,15 +291,10 @@ def render_p1(
     chip_radius = 18
 
     chip_x = pad
-    # align chips vertically around reel mid
-    stack_h_est = 2 * (text_size(draw, "Ag", chip_font)[1] + chip_pad_y * 2) + chip_gap_y
-    chip_y = int((hero_top + hero_bottom) / 2) - stack_h_est // 2 + 40  # tweak +40 if needed
+    chip_y = hero_bottom + 20   # start just below the reel
 
+    chips_bottom = chip_y
     for c in features:
-        c = (c or "").strip()
-        if not c:
-            continue
-
         tw, th = text_size(draw, c, chip_font)
         bw = tw + chip_pad_x * 2
         bh = th + chip_pad_y * 2
@@ -324,26 +303,29 @@ def render_p1(
         draw.text((chip_x + chip_pad_x, chip_y + chip_pad_y), c, font=chip_font, fill=(40, 40, 40, 255))
 
         chip_y += bh + chip_gap_y
+        chips_bottom = chip_y
 
-
-    # --- FIX 4: Bottom CTA (smaller, bordered pill like RASCAL) ---
+    # --- FIX 4: CTA BELOW chips, near bottom, bordered pill ---
     cta_text = "READY STOCK • FAST SHIP"
     cta_font = load_font(44)
 
     tw, th = text_size(draw, cta_text, cta_font)
-    pad_x = 30
-    pad_y = 14
-    bw = tw + pad_x * 2
-    bh = th + pad_y * 2
+    cta_pad_x = 30
+    cta_pad_y = 14
+    cta_w = tw + cta_pad_x * 2
+    cta_h = th + cta_pad_y * 2
 
-    bx0 = int(W * 0.52) - bw // 2     # slightly right, like RASCAL
-    by0 = int(H * 0.78)              # move up from bottom
-    bx1 = bx0 + bw
-    by1 = by0 + bh
+    cta_x0 = int(W * 0.52) - cta_w // 2
 
-    draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255))
-    draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, outline=(20, 20, 20, 255), width=4)
-    draw.text((bx0 + pad_x, by0 + pad_y), cta_text, font=cta_font, fill=(20, 20, 20, 255))
+    cta_y0 = chips_bottom + 16
+    cta_y0 = min(cta_y0, H - pad - cta_h)
+
+    cta_x1 = cta_x0 + cta_w
+    cta_y1 = cta_y0 + cta_h
+
+    draw_rounded_rect(draw, (cta_x0, cta_y0, cta_x1, cta_y1), radius=18, fill=(245, 204, 74, 255))
+    draw.rounded_rectangle((cta_x0, cta_y0, cta_x1, cta_y1), radius=18, outline=(20, 20, 20, 255), width=4)
+    draw.text((cta_x0 + cta_pad_x, cta_y0 + cta_pad_y), cta_text, font=cta_font, fill=(20, 20, 20, 255))
 
 
 
