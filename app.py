@@ -220,7 +220,7 @@ def render_p1(
     # --- RASCAL-style top-right badge (use chip3) ---
     badge_text = (chip3 or "").strip()
     if badge_text:
-    badge_font = load_font_bold(44)
+        badge_font = load_font_bold(44)
 
     tw, th = text_size(draw, badge_text, badge_font)
     pad_x = 26
@@ -268,23 +268,22 @@ def render_p1(
 
     canvas.alpha_composite(hero_rs, (px, py))
 
-    # --- FIX 3: Feature chips (2 items) ---
+    # --- FIX 3: Feature chips (2 items) under/left area ---
     features = [chip1, chip2]  # only 2 like RASCAL
-
-    chip_font = load_font(44)
+    chip_font = load_font_regular(44)
     chip_gap_y = 26
     chip_pad_x = 22
     chip_pad_y = 14
     chip_radius = 18
 
     chip_x = pad
-    chip_y = int(H * 0.70)  # tweak 0.66~0.78
+    chip_y = int(H * 0.74)  # tweak 0.70~0.78
 
     for c in features:
+        c = (c or "").strip()
         if not c:
             continue
 
-        c = str(c).strip()
         tw, th = text_size(draw, c, chip_font)
         bw = tw + chip_pad_x * 2
         bh = th + chip_pad_y * 2
@@ -303,6 +302,7 @@ def render_p1(
         )
 
         chip_y += bh + chip_gap_y
+
 
 
     # --- FIX 4: Bottom CTA banner ---
