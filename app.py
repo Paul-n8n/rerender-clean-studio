@@ -229,33 +229,33 @@ def render_p1(
     draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
     model_h = text_size(draw, model_text, model_font)[1]
 
-        # 5) Top-right size badge (chip3)
-        size_text = (chip3 or "").strip()
-        if size_text:
-            badge_font = load_font_bold(44)
-            pad_x, pad_y = 26, 14
+        model_h = text_size(draw, model_text, model_font)[1]
 
-            tw, th = text_size(draw, size_text, badge_font)
-            bw, bh = tw + pad_x * 2, th + pad_y * 2
+    # 5) Top-right size badge (chip3)
+    size_text = (chip3 or "").strip()
+    if size_text:
+        badge_font = load_font_bold(44)
+        pad_x, pad_y = 26, 14
 
-            bx1 = W - pad
-            by0 = top_pad + 18
-            bx0 = bx1 - bw
-            by1 = by0 + bh
+        tw, th = text_size(draw, size_text, badge_font)
+        bw, bh = tw + pad_x * 2, th + pad_y * 2
 
-            draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255))
-            draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, outline=(20, 20, 20, 255), width=4)
+        bx1 = W - pad
+        by0 = top_pad + 18
+        bx0 = bx1 - bw
+        by1 = by0 + bh
 
-            # center text inside badge
-            bbox = draw.textbbox((0, 0), size_text, font=badge_font)
-            text_w = bbox[2] - bbox[0]
-            text_h = bbox[3] - bbox[1]
-            tx = bx0 + (bw - text_w) // 2
-            ty = by0 + (bh - text_h) // 2 - 1
-            draw.text((tx, ty), size_text, font=badge_font, fill=(20, 20, 20, 255))
+        draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=18, fill=(245, 204, 74, 255))
+        draw.rounded_rectangle((bx0, by0, bx1, by1), radius=18, outline=(20, 20, 20, 255), width=4)
 
+        # center text inside badge
+        bbox = draw.textbbox((0, 0), size_text, font=badge_font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        tx = bx0 + (bw - text_w) // 2
+        ty = by0 + (bh - text_h) // 2 - 1
+        draw.text((tx, ty), size_text, font=badge_font, fill=(20, 20, 20, 255))
 
-    
     # 6) Make hero big + anchor to lower-right
     box_w = hero_box[2] - hero_box[0]
     box_h = hero_box[3] - hero_box[1]
