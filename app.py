@@ -203,7 +203,7 @@ def render_p1(
     hero_w, hero_h = hero.size
 
     # target size: fill ~88% of available height (tweak 0.88 -> 0.92 if you want even bigger)
-    target_h = int(box_h * 0.92)
+    target_h = int(box_h * 0.86)
     scale = target_h / hero_h
 
     new_w = max(1, int(hero_w * scale))
@@ -215,15 +215,16 @@ def render_p1(
     margin_bottom = 0
 
     px = W - new_w
-    py = int(H * 0.24)   # move up (tweak 0.24~0.34)
+    py = int(H * 0.22)   # move up (tweak 0.24~0.34)
 
     # safety: don't go above header
     py = max(py, header_h)
 
     canvas.alpha_composite(hero_rs, (px, py))
 
-    # --- FIX 3: Feature chips (2 items) under/left area ---
+    # --- FIX 3: Feature chips (2 items) ---
     features = [chip1, chip2]  # only 2 like RASCAL
+
     chip_font = load_font(44)
     chip_gap_y = 26
     chip_pad_x = 22
@@ -231,48 +232,51 @@ def render_p1(
     chip_radius = 18
 
     chip_x = pad
-    chip_y = int(H * 0.74)  # tweak 0.64~0.74
+    chip_y = int(H * 0.70)  # tweak 0.66~0.78
 
     for c in features:
         if not c:
             continue
 
-    tw, th = text_size(draw, c, chip_font)
-    bw = tw + chip_pad_x * 2
-    bh = th + chip_pad_y * 2
+        c = str(c).strip()
+        tw, th = text_size(draw, c, chip_font)
+        bw = tw + chip_pad_x * 2
+        bh = th + chip_pad_y * 2
 
-    draw_rounded_rect(
-        draw,
-        (chip_x, chip_y, chip_x + bw, chip_y + bh),
-        radius=chip_radius,
-        fill=(245, 246, 248, 255)
-    )
-    draw.text(
-        (chip_x + chip_pad_x, chip_y + chip_pad_y),
-        c,
-        font=chip_font,
-        fill=(40, 40, 40, 255)
-    )
+        draw_rounded_rect(
+            draw,
+            (chip_x, chip_y, chip_x + bw, chip_y + bh),
+            radius=chip_radius,
+            fill=(245, 246, 248, 255),
+        )
+        draw.text(
+            (chip_x + chip_pad_x, chip_y + chip_pad_y),
+            c,
+            font=chip_font,
+            fill=(40, 40, 40, 255),
+        )
 
-    chip_y += bh + chip_gap_y
+        chip_y += bh + chip_gap_y
+
 
     # --- FIX 4: Bottom CTA banner ---
     cta_text = "READY STOCK • FAST SHIP"
     cta_font = load_font(54)
 
     tw, th = text_size(draw, cta_text, cta_font)
-    pad_x = 34
-    pad_y = 18
-    bw = tw + pad_x * 2
-    bh = th + pad_y * 2
+    cta_pad_x = 34
+    cta_pad_y = 18
+    bw = tw + cta_pad_x * 2
+    bh = th + cta_pad_y * 2
 
     bx0 = (W - bw) // 2
-    by0 = int(H * 0.88)   # tweak 0.84~0.90
+    by0 = int(H * 0.88)     # tweak 0.84~0.90
     bx1 = bx0 + bw
     by1 = by0 + bh
 
     draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=22, fill=(245, 204, 74, 255))
-    draw.text((bx0 + pad_x, by0 + pad_y), cta_text, font=cta_font, fill=(20, 20, 20, 255))
+    draw.text((bx0 + cta_pad_x, by0 + cta_pad_y), cta_text, font=cta_font, fill=(20, 20, 20, 255))
+
 
     # 7) Output PNG
     out = BytesIO()
