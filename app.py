@@ -11,6 +11,9 @@ from PIL import Image, ImageDraw, ImageFont
 app = FastAPI()
 
 VERSION = "P1 v2026-02-09A"
+# DEBUG: show received chip values
+dbg = f"c1={chip1} | c2={chip2} | c3={chip3}"
+draw.text((10, 930), dbg, font=load_font(20), fill=(255, 0, 0, 255))
 
 
 # ---------- R2 client ----------
