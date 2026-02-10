@@ -254,31 +254,30 @@ def render_p1(
         ty = by0 + (bh - text_h) // 2 - 1
         draw.text((tx, ty), size_text, font=badge_font, fill=(20, 20, 20, 255))
 
-    # 6) Make hero big + anchor to lower-right
-    box_w = hero_box[2] - hero_box[0]
-    box_h = hero_box[3] - hero_box[1]
+    # 6) HERO placement (RASCAL-style: hero ~50% of canvas)
+    # Define a "stage" area where the reel must fit.
+    # This guarantees chips + CTA have space below.
+    stage_left   = int(W * 0.40)    # hero sits on right half
+    stage_right  = W - pad          # keep a small right margin
+    stage_top    = int(H * 0.28)    # move hero higher
+    stage_bottom = int(H * 0.72)    # hero ends around mid-lower (≈50% height zone)
 
+    stage_w = stage_right - stage_left
+    stage_h = stage_bottom - stage_top
+
+    # Resize hero to fit inside stage (preserve aspect ratio)
     hero_w, hero_h = hero.size
-
-    # target size: fill ~88% of available height (tweak 0.88 -> 0.92 if you want even bigger)
-    target_h = int(box_h * 0.86)
-    scale = target_h / hero_h
-
+    scale = min(stage_w / hero_w, stage_h / hero_h)
     new_w = max(1, int(hero_w * scale))
     new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # anchor to CANVAS bottom-right (within pad)
-    margin_right = 0
-    margin_bottom = 0
+    # Anchor hero to bottom-right of the stage (like RASCAL)
+    px = stage_right - new_w
+    py = stage_bottom - new_h
 
-    px = W - new_w
-    py = int(H * 0.22)   # move up (tweak 0.24~0.34)
-
-
-      # reserve space under the reel for chips + CTA (tweak 260 if needed)
-    py = min(py, H - 340 - new_h)
-    py = max(py, header_h)
+    # Safety: don't overlap header
+    py = max(py, header_h + 10)
 
     canvas.alpha_composite(hero_rs, (px, py))
 
