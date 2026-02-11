@@ -108,7 +108,7 @@ def fit_text(draw: ImageDraw.ImageDraw, text: str, max_w: int, start_size: int, 
         size -= 2
     return load_font(min_size)
 
-def draw_text_align_left(draw, bx, by, brand_text, brand_font, (20, 20, 20, 255))
+def draw_text_align_left(draw, x, y, text, font, fill):
     # compensates for glyph left-bearing so visual left edges align
     bbox = draw.textbbox((0, 0), text, font=font)
     left_bearing = bbox[0]
@@ -224,16 +224,35 @@ def render_p1(
 
     # Optical alignment nudge (fixes "protruding" look)
     brand_x_nudge = 2
-    draw.text((bx + brand_x_nudge, by), brand_text, font=brand_font, fill=(20, 20, 20, 255))
+
+    # Brand (use left-bearing compensated draw)
+    draw_text_align_left(
+        draw,
+        bx + brand_x_nudge,
+        by,
+        brand_text,
+        brand_font,
+        (20, 20, 20, 255),
+    )
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
-    # 4b) Model (HUGE) — BOLD font
+    # Model (HUGE) — BOLD font
     model_text = (model or "").strip().upper()
     model_font = fit_text(draw, model_text, max_w=header_max_w, start_size=240, min_size=140)
 
     model_y = by + brand_h - 10
-    draw.text((bx, model_y), model_text, font=model_font, fill=(20, 20, 20, 255))
+
+    # Model (use left-bearing compensated draw)
+    draw_text_align_left(
+        draw,
+        bx,
+        model_y,
+        model_text,
+        model_font,
+        (20, 20, 20, 255),
+    )
     model_h = text_size(draw, model_text, model_font)[1]
+
 
     # 5) Top-right size badge (chip3)
     size_text = (chip3 or "").strip()
@@ -299,7 +318,7 @@ def render_p1(
     chip_x = pad
     chip_y = hero_bottom + CHIP_TOP_GAP  # locked start under hero
 
-    chips_bottom = chip_y - CHIP_GAP_Y
+    chips_bottom = None
     for c in features:
         tw, th = text_size(draw, c, chip_font)
         bw = tw + chip_pad_x * 2
@@ -326,7 +345,11 @@ def render_p1(
         draw.text((tx, ty), c, font=chip_font, fill=(40, 40, 40, 255))
 
         chip_y += bh + CHIP_GAP_Y
-        chips_bottom = chip_y
+        chips_bottom = chip_y - CHIP_GAP_Y   # ✅ end of last chip (not next slot)
+
+    if chips_bottom is None:
+        chips_bottom = hero_bottom
+
 
     # 8) CTA (LOCKED) — always below chips, never clipped
     cta_text = "READY STOCK • FAST SHIP"
