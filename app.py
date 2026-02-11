@@ -115,7 +115,6 @@ def draw_text_align_left(draw, bx, by, brand_text, brand_font, (20, 20, 20, 255)
     draw.text((x - left_bearing, y), text, font=font, fill=fill)
 
 
-
 # ---------- Routes ----------
 @app.get("/health")
 def health():
@@ -300,7 +299,7 @@ def render_p1(
     chip_x = pad
     chip_y = hero_bottom + CHIP_TOP_GAP  # locked start under hero
 
-    chips_bottom = chip_y
+    chips_bottom = chip_y - CHIP_GAP_Y
     for c in features:
         tw, th = text_size(draw, c, chip_font)
         bw = tw + chip_pad_x * 2
