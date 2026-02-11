@@ -9,7 +9,9 @@ from fastapi.responses import Response
 from PIL import Image, ImageDraw, ImageFont
 
 app = FastAPI()
-
+@app.get("/")
+def root():
+    return {"ok": True, "service": "rerender-clean-studio"}
 VERSION = "P1 v2026-02-09A"
 
 # ---------- R2 client ----------
