@@ -108,7 +108,7 @@ def fit_text(draw: ImageDraw.ImageDraw, text: str, max_w: int, start_size: int, 
         size -= 2
     return load_font(min_size)
 
-def draw_text_align_left(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill):
+def draw_text_align_left(draw, bx, by, brand_text, brand_font, (20, 20, 20, 255))
     # compensates for glyph left-bearing so visual left edges align
     bbox = draw.textbbox((0, 0), text, font=font)
     left_bearing = bbox[0]
@@ -173,7 +173,7 @@ def render_p1(
     model: str = Query("RS"),
     chip1: str = Query("3BB"),
     chip2: str = Query("5.1:1"),
-    chip3: str = Query("Max Drag 8kg"),
+    chip3: str = Query("RS1000-6000"),
     theme: str = Query("yellow"),
 ):
     """
@@ -199,6 +199,13 @@ def render_p1(
     pad = 56
     top_pad = 44
     header_h = 260  # enough room for brand + model + chips (tweak 240~300)
+
+    # LOCKED bottom stack layout
+    BOTTOM_SAFE = 56          # bottom padding
+    CHIP_TOP_GAP = 26         # gap from hero bottom to first chip
+    CHIP_GAP_Y = 18           # gap between chip1 and chip2
+    CTA_GAP_Y = 22            # gap from last chip to CTA
+
 
     # keep header on the LEFT so it never fights with the hero
     header_left = pad
@@ -254,51 +261,44 @@ def render_p1(
         ty = by0 + (bh - text_h) // 2 - 1
         draw.text((tx, ty), size_text, font=badge_font, fill=(20, 20, 20, 255))
 
-    # 6) HERO placement (RASCAL-style: hero ~50% of canvas)
-    # Define a "stage" area where the reel must fit.
-    # This guarantees chips + CTA have space below.
-    stage_left   = int(W * 0.40)    # hero sits on right half
-    stage_right  = W - pad          # keep a small right margin
-    stage_top    = int(H * 0.28)    # move hero higher
-    stage_bottom = int(H * 0.72)    # hero ends around mid-lower (≈50% height zone)
-
-    stage_w = stage_right - stage_left
-    stage_h = stage_bottom - stage_top
-
-    # Resize hero to fit inside stage (preserve aspect ratio)
+    # 6) Hero (LOCKED) — RASCAL-scale geometry
     hero_w, hero_h = hero.size
-    scale = min(stage_w / hero_w, stage_h / hero_h)
+
+    # LOCK: hero height ≈ 54% of canvas height (RASCAL-like 52–56%)
+    TARGET_H_RATIO = 0.54
+    target_h = int(H * TARGET_H_RATIO)
+    scale = target_h / hero_h
+
     new_w = max(1, int(hero_w * scale))
     new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Anchor hero to bottom-right of the stage (like RASCAL)
-    px = stage_right - new_w
-    py = stage_bottom - new_h
+    # LOCK: right-aligned, hero top ≈ 28% of canvas (RASCAL-like)
+    px = W - new_w
+    py = int(H * 0.24)
 
-    # Safety: don't overlap header
-    py = max(py, header_h + 10)
+    # Safety: never overlap header
+    py = max(py, header_h)
 
     canvas.alpha_composite(hero_rs, (px, py))
 
     hero_left = px
-    hero_top  = py
+    hero_top = py
     hero_right = px + new_w
     hero_bottom = py + new_h
 
 
-    # --- FIX 3: Feature chips BELOW the reel (chip1, chip2) ---
+    # 7) Chips (LOCKED) — always below hero
     features = [(chip1 or "").strip(), (chip2 or "").strip()]
     features = [c for c in features if c]
 
     chip_font = load_font(46)
-    chip_gap_y = 22
     chip_pad_x = 22
     chip_pad_y = 14
     chip_radius = 18
 
     chip_x = pad
-    chip_y = hero_bottom + 20   # start just below the reel
+    chip_y = hero_bottom + CHIP_TOP_GAP  # locked start under hero
 
     chips_bottom = chip_y
     for c in features:
@@ -306,32 +306,55 @@ def render_p1(
         bw = tw + chip_pad_x * 2
         bh = th + chip_pad_y * 2
 
-        draw_rounded_rect(draw, (chip_x, chip_y, chip_x + bw, chip_y + bh), radius=chip_radius, fill=(245, 246, 248, 255))
-        draw.text((chip_x + chip_pad_x, chip_y + chip_pad_y), c, font=chip_font, fill=(40, 40, 40, 255))
+        # keep chips inside canvas
+        if chip_y + bh > H - BOTTOM_SAFE:
+            break
 
-        chip_y += bh + chip_gap_y
+        draw_rounded_rect(
+            draw,
+            (chip_x, chip_y, chip_x + bw, chip_y + bh),
+            radius=chip_radius,
+            fill=(245, 246, 248, 255),
+        )
+
+        # vertically center text inside chip
+        bbox = draw.textbbox((0, 0), c, font=chip_font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        tx = chip_x + chip_pad_x
+        ty = chip_y + (bh - text_h) // 2 - 1
+
+        draw.text((tx, ty), c, font=chip_font, fill=(40, 40, 40, 255))
+
+        chip_y += bh + CHIP_GAP_Y
         chips_bottom = chip_y
 
-    # --- FIX 4: CTA BELOW chips, near bottom, bordered pill ---
+    # 8) CTA (LOCKED) — always below chips, never clipped
     cta_text = "READY STOCK • FAST SHIP"
     cta_font = load_font_bold(40)
-
-    tw, th = text_size(draw, cta_text, cta_font)
     cta_pad_x = 24
     cta_pad_y = 10
+    cta_radius = 18
+    cta_border_w = 4
+
+    tw, th = text_size(draw, cta_text, cta_font)
     cta_w = tw + cta_pad_x * 2
     cta_h = th + cta_pad_y * 2
 
+    # center-ish like RASCAL (slightly right)
     cta_x0 = int(W * 0.52) - cta_w // 2
 
-    cta_y0 = chips_bottom + 16
-    cta_y0 = min(cta_y0, H - pad - cta_h)
+    # locked position: below chips; clamp to bottom-safe
+    cta_y0 = chips_bottom + CTA_GAP_Y
+    cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
 
     cta_x1 = cta_x0 + cta_w
     cta_y1 = cta_y0 + cta_h
 
-    draw_rounded_rect(draw, (cta_x0, cta_y0, cta_x1, cta_y1), radius=18, fill=(245, 204, 74, 255))
-    draw.rounded_rectangle((cta_x0, cta_y0, cta_x1, cta_y1), radius=18, outline=(20, 20, 20, 255), width=4)
+    draw_rounded_rect(draw, (cta_x0, cta_y0, cta_x1, cta_y1), radius=cta_radius, fill=(245, 204, 74, 255))
+    draw.rounded_rectangle((cta_x0, cta_y0, cta_x1, cta_y1), radius=cta_radius, outline=(20, 20, 20, 255), width=cta_border_w)
+
+    # center text inside CTA
     bbox = draw.textbbox((0, 0), cta_text, font=cta_font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
@@ -339,8 +362,7 @@ def render_p1(
     ty = cta_y0 + (cta_h - text_h) // 2 - 1
     draw.text((tx, ty), cta_text, font=cta_font, fill=(20, 20, 20, 255))
 
-
-    # 7) Output PNG
+    # 9) Output PNG
     out = BytesIO()
     canvas.convert("RGBA").save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
