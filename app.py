@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12D"
+VERSION = "P1 v2026-02-12E"
 
 # ---------- R2 client ----------
 def r2_client():
@@ -103,7 +103,6 @@ def draw_text_align_left(draw, x, y, text, font, fill):
 
 
 def draw_text_centered_in_box(draw, box_x0, box_y0, box_w, box_h, text, font, fill):
-    """Draw text perfectly centered inside a box, compensating for textbbox offsets."""
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
@@ -171,16 +170,6 @@ def render_p1(
     chip3: str = Query("RS1000-6000"),
     theme: str = Query("yellow"),
 ):
-    """
-    Shopee P1 (1000x1000) compositor — RASCAL style v3d.
-
-    Layout (matching RASCAL reference):
-    - Brand/Model: top-left, model is HUGE bold
-    - Size badge (chip3): top-right, yellow pill
-    - Hero reel: large (~62%), lower center-right, overlaps text zone
-    - Chips (chip1, chip2): HORIZONTAL ROW below hero, left-aligned
-    - CTA: very bottom, small, centered
-    """
     # 1) Load hero image from R2
     data = r2_get_object_bytes(key)
     try:
@@ -197,36 +186,29 @@ def render_p1(
     # 3) Layout constants
     pad = 56
     top_pad = 44
-    BOTTOM_SAFE = 28       # small bottom margin (no version stamp now)
+    BOTTOM_SAFE = 28
 
-    CHIP_TOP_GAP = 14      # gap: hero bottom -> chip row
-    CHIP_GAP_X = 10        # horizontal gap between chips
-    CTA_GAP_Y = 10         # gap: chip row -> CTA
+    CHIP_TOP_GAP = 16
+    CHIP_GAP_X = 20        # UPDATED: was 10, wider gap between chips
+    CTA_GAP_Y = 12
 
     header_left = pad
     header_top = top_pad
     header_max_w = int(W * 0.55) - header_left
 
-    # ============================================================
-    # 4) BRAND text (regular weight)
-    # ============================================================
+    # 4) BRAND text
     brand_text = (brand or "").strip().upper()
     brand_font = fit_text(draw, brand_text, max_w=header_max_w,
                           start_size=56, min_size=34, loader=load_font_regular)
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
-    # ============================================================
-    # 5) MODEL text (bold, HUGE)
-    # ============================================================
+    # 5) MODEL text
     model_text = (model or "").strip().upper()
     model_font = fit_text(draw, model_text, max_w=header_max_w,
                           start_size=200, min_size=100, loader=load_font_bold)
-    model_h = text_size(draw, model_text, model_font)[1]
     model_y = header_top + brand_h - 6
 
-    # ============================================================
-    # 6) Pre-compute chip & CTA sizes (for bottom-fit clamp)
-    # ============================================================
+    # 6) Pre-compute chip & CTA sizes
     features = [(chip1 or "").strip(), (chip2 or "").strip()]
     features = [c for c in features if c]
 
@@ -235,7 +217,6 @@ def render_p1(
     chip_pad_y = 8
     chip_radius = 10
 
-    # CTA — very small, bottom-anchored
     cta_text = "READY STOCK \u2022 FAST SHIP"
     cta_font = load_font_bold(18)
     cta_pad_x = 14
@@ -247,16 +228,12 @@ def render_p1(
     cta_w = cta_tw + cta_pad_x * 2
     cta_h = cta_th + cta_pad_y * 2
 
-    # Chip row height (single row, horizontal)
     _, sample_chip_h = text_size(draw, "X", chip_font)
     chip_row_h = sample_chip_h + chip_pad_y * 2
 
-    # Total space needed below hero: chip row + CTA
     needed_below = CHIP_TOP_GAP + chip_row_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
 
-    # ============================================================
-    # 7) HERO — ~62% height, lower and more right
-    # ============================================================
+    # 7) HERO — ~62% height, slightly higher for chip/CTA space
     hero_w, hero_h = hero.size
 
     TARGET_H_RATIO = 0.62
@@ -267,15 +244,13 @@ def render_p1(
     new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Horizontal: center with strong right shift
     px = (W - new_w) // 2 + 100
     px = max(px, pad)
     px = min(px, W - new_w - 10)
 
-    # Vertical: start ~28% from top (push down more)
-    py = int(H * 0.28)
+    # UPDATED: 24% from top (was 28%) — slightly higher to give bottom space
+    py = int(H * 0.24)
 
-    # Bottom-fit clamp: push hero up only if needed
     max_hero_bottom = H - needed_below
     if py + new_h > max_hero_bottom:
         py = max_hero_bottom - new_h
@@ -283,9 +258,7 @@ def render_p1(
 
     hero_bottom = py + new_h
 
-    # ============================================================
-    # DRAW ORDER: text first, then hero on top (RASCAL style)
-    # ============================================================
+    # DRAW ORDER: text first, then hero on top
 
     # Draw Brand
     draw_text_align_left(draw, header_left + 2, header_top,
@@ -295,7 +268,7 @@ def render_p1(
     draw_text_align_left(draw, header_left, model_y,
                          model_text, model_font, (20, 20, 20, 255))
 
-    # Size badge (chip3) — top-right yellow pill
+    # Size badge (chip3)
     size_text = (chip3 or "").strip()
     if size_text:
         badge_font = load_font_bold(38)
@@ -320,9 +293,7 @@ def render_p1(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # ============================================================
-    # 8) CHIPS — HORIZONTAL ROW below hero, left-aligned
-    # ============================================================
+    # 8) CHIPS — horizontal row below hero, left-aligned
     chip_x = pad
     chip_y = hero_bottom + CHIP_TOP_GAP
 
@@ -331,7 +302,6 @@ def render_p1(
         bw = tw + chip_pad_x * 2
         bh = th + chip_pad_y * 2
 
-        # Safety: don't draw if off-canvas
         if chip_x + bw > W - pad:
             break
 
@@ -350,16 +320,15 @@ def render_p1(
         draw_text_centered_in_box(draw, chip_x, chip_y, bw, bh,
                                   c, chip_font, (30, 30, 30, 255))
 
-        # Move right for next chip (horizontal layout)
         chip_x += bw + CHIP_GAP_X
 
     chips_bottom = chip_y + chip_row_h
 
-    # ============================================================
-    # 9) CTA — anchored to very bottom, small, centered
-    # ============================================================
+    # 9) CTA — below chips, centered
     cta_x0 = (W - cta_w) // 2
-    cta_y0 = H - BOTTOM_SAFE - cta_h
+    cta_y0 = chips_bottom + CTA_GAP_Y
+    # Don't let it go below bottom safe
+    cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
 
     cta_x1 = cta_x0 + cta_w
     cta_y1 = cta_y0 + cta_h
