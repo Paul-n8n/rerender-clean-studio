@@ -16,19 +16,19 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12K"
+VERSION = "P1 v2026-02-12L"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
 STICKER_BORDER_W = 3
-STICKER_FILL = (245, 204, 74, 255)       # yellow
-STICKER_OUTLINE = (20, 20, 20, 255)       # black
+STICKER_FILL = (245, 204, 74, 255)
+STICKER_OUTLINE = (20, 20, 20, 255)
 STICKER_TEXT = (20, 20, 20, 255)
 
 # ======================== CHIP LAYOUT STANDARDS =======================
-ICON_H = 70               # fixed icon height — thumb-safe at Shopee grid
-ICON_TEXT_GAP = 14         # gap between icon and chip text
-CHIP_GAP_X = 70            # gap between chip1 group and chip2 group
+ICON_SIZE = 70             # icons fit within 70x70 square bounding box
+ICON_TEXT_GAP = 14
+CHIP_GAP_X = 70
 CHIP_TEXT_COLOR = (30, 30, 30, 255)
 
 # =====================================================================
@@ -70,7 +70,6 @@ def r2_get_object_bytes(key: str) -> bytes:
 
 # ---------- Fonts ----------
 def load_font_regular(size: int) -> ImageFont.FreeTypeFont:
-    # Try custom font first, fallback to system
     for path in [
         os.path.join(os.path.dirname(__file__), "assets", "fonts", "Inter-Medium.ttf"),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -83,7 +82,6 @@ def load_font_regular(size: int) -> ImageFont.FreeTypeFont:
 
 
 def load_font_bold(size: int) -> ImageFont.FreeTypeFont:
-    # Try custom font first, fallback to system
     for path in [
         os.path.join(os.path.dirname(__file__), "assets", "fonts", "ArchivoNarrow-Black.ttf"),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -169,17 +167,31 @@ BG_DIR = os.path.join(ASSETS_DIR, "backgrounds")
 ICONS_DIR = os.path.join(ASSETS_DIR, "icons")
 
 
-def load_icon(filename: str, target_h: int) -> Optional[Image.Image]:
-    """Load a PNG icon and scale to target height (proportional width)."""
+def load_icon(filename: str, box_size: int) -> Optional[Image.Image]:
+    """
+    Load a PNG icon and scale to fit within a box_size x box_size square.
+    Maintains aspect ratio. Result is always box_size x box_size with
+    the icon centered and transparent padding around it.
+    """
     path = os.path.join(ICONS_DIR, filename)
     if not os.path.exists(path):
         return None
     try:
         icon = Image.open(path).convert("RGBA")
-        ratio = target_h / icon.height
-        new_w = max(1, int(icon.width * ratio))
-        icon = icon.resize((new_w, target_h), Image.LANCZOS)
-        return icon
+
+        # Scale to fit within the square (use the limiting dimension)
+        scale = min(box_size / icon.width, box_size / icon.height)
+        new_w = max(1, int(icon.width * scale))
+        new_h = max(1, int(icon.height * scale))
+        icon = icon.resize((new_w, new_h), Image.LANCZOS)
+
+        # Center in a box_size x box_size transparent canvas
+        result = Image.new("RGBA", (box_size, box_size), (0, 0, 0, 0))
+        offset_x = (box_size - new_w) // 2
+        offset_y = (box_size - new_h) // 2
+        result.alpha_composite(icon, (offset_x, offset_y))
+
+        return result
     except Exception:
         return None
 
@@ -280,20 +292,22 @@ def render_p1(
     cta_w = cta_tw + cta_pad_x * 2
     cta_h = cta_th + cta_pad_y * 2
 
-    # Load icons at FIXED ICON_H (not text-derived)
+    # Load icons into ICON_SIZE x ICON_SIZE square boxes
     chip_groups = []
     for i, c in enumerate(features):
         tw, th = text_size(draw, c, chip_font)
         icon_file = CHIP_ICONS.get(i)
-        icon = load_icon(icon_file, ICON_H) if icon_file else None
-        icon_w = icon.width if icon else 0
+        icon = load_icon(icon_file, ICON_SIZE) if icon_file else None
+
+        # Icon is always ICON_SIZE x ICON_SIZE (or None)
+        icon_w = ICON_SIZE if icon else 0
 
         if icon:
             group_w = icon_w + ICON_TEXT_GAP + tw
         else:
             group_w = tw
 
-        group_h = max(ICON_H, th)
+        group_h = max(ICON_SIZE, th)
         chip_groups.append((c, tw, th, group_w, group_h, icon, icon_w))
 
     chip_row_h = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
@@ -331,15 +345,13 @@ def render_p1(
 
     # DRAW ORDER: text first, then hero on top
 
-    # Draw Brand
     draw_text_align_left(draw, header_left, header_top,
                          brand_text, brand_font, (20, 20, 20, 255))
 
-    # Draw Model
     draw_text_align_left(draw, header_left, model_y,
                          model_text, model_font, (20, 20, 20, 255))
 
-    # Size badge (chip3) — uses standardized sticker
+    # Size badge (chip3)
     size_text = (chip3 or "").strip()
     if size_text:
         badge_font = load_font_bold(38)
@@ -359,7 +371,7 @@ def render_p1(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # 8) CHIPS — icon + text, centered row, FIXED icon size
+    # 8) CHIPS — icon + text, centered row
     chip_y_top = hero_bottom + CHIP_TOP_GAP
     chip_y_center = chip_y_top + chip_row_h // 2
     chip_start_x = (W - total_chips_w) // 2
@@ -367,7 +379,7 @@ def render_p1(
     cur_x = chip_start_x
     for c, tw, th, gw, gh, icon, icon_w in chip_groups:
         if icon:
-            icon_y = chip_y_center - icon.height // 2
+            icon_y = chip_y_center - ICON_SIZE // 2
             canvas.alpha_composite(icon, (cur_x, icon_y))
             draw = ImageDraw.Draw(canvas)
 
@@ -384,7 +396,7 @@ def render_p1(
 
     chips_bottom = chip_y_top + chip_row_h
 
-    # 9) CTA — below chips, standardized sticker pill
+    # 9) CTA — below chips, centered
     cta_x0 = (W - cta_w) // 2
     cta_y0 = chips_bottom + CTA_GAP_Y
     cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
