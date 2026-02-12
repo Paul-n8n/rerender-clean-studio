@@ -16,7 +16,22 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12J"
+VERSION = "P1 v2026-02-12K"
+
+# ======================== STICKER UI STANDARDS ========================
+STICKER_RADIUS = 14
+STICKER_BORDER_W = 3
+STICKER_FILL = (245, 204, 74, 255)       # yellow
+STICKER_OUTLINE = (20, 20, 20, 255)       # black
+STICKER_TEXT = (20, 20, 20, 255)
+
+# ======================== CHIP LAYOUT STANDARDS =======================
+ICON_H = 70               # fixed icon height — thumb-safe at Shopee grid
+ICON_TEXT_GAP = 14         # gap between icon and chip text
+CHIP_GAP_X = 70            # gap between chip1 group and chip2 group
+CHIP_TEXT_COLOR = (30, 30, 30, 255)
+
+# =====================================================================
 
 # ---------- R2 client ----------
 def r2_client():
@@ -55,7 +70,11 @@ def r2_get_object_bytes(key: str) -> bytes:
 
 # ---------- Fonts ----------
 def load_font_regular(size: int) -> ImageFont.FreeTypeFont:
-    for path in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]:
+    # Try custom font first, fallback to system
+    for path in [
+        os.path.join(os.path.dirname(__file__), "assets", "fonts", "Inter-Medium.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]:
         try:
             return ImageFont.truetype(path, size=size)
         except Exception:
@@ -64,7 +83,11 @@ def load_font_regular(size: int) -> ImageFont.FreeTypeFont:
 
 
 def load_font_bold(size: int) -> ImageFont.FreeTypeFont:
-    for path in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]:
+    # Try custom font first, fallback to system
+    for path in [
+        os.path.join(os.path.dirname(__file__), "assets", "fonts", "ArchivoNarrow-Black.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ]:
         try:
             return ImageFont.truetype(path, size=size)
         except Exception:
@@ -109,6 +132,18 @@ def draw_text_centered_in_box(draw, box_x0, box_y0, box_w, box_h, text, font, fi
     tx = box_x0 + (box_w - text_w) // 2 - bbox[0]
     ty = box_y0 + (box_h - text_h) // 2 - bbox[1]
     draw.text((tx, ty), text, font=font, fill=fill)
+
+
+def draw_sticker_pill(draw, x0, y0, x1, y1, text, font):
+    """Draw a standardized yellow sticker pill with centered text."""
+    draw_rounded_rect(draw, (x0, y0, x1, y1),
+                      radius=STICKER_RADIUS, fill=STICKER_FILL)
+    draw.rounded_rectangle((x0, y0, x1, y1),
+                           radius=STICKER_RADIUS,
+                           outline=STICKER_OUTLINE,
+                           width=STICKER_BORDER_W)
+    draw_text_centered_in_box(draw, x0, y0, x1 - x0, y1 - y0,
+                              text, font, STICKER_TEXT)
 
 
 def trim_transparent(im: Image.Image, pad: int = 0) -> Image.Image:
@@ -212,15 +247,13 @@ def render_p1(
     BOTTOM_SAFE = 28
 
     CHIP_TOP_GAP = 16
-    CHIP_GAP_X = 50
     CTA_GAP_Y = 20
-    ICON_TEXT_GAP = 8        # tighter gap between icon and text
 
     header_left = pad
     header_top = top_pad
     header_max_w = int(W * 0.55) - header_left
 
-    # 4) BRAND text — aligned to same left edge as model
+    # 4) BRAND text
     brand_text = (brand or "").strip().upper()
     brand_font = fit_text(draw, brand_text, max_w=header_max_w,
                           start_size=56, min_size=34, loader=load_font_regular)
@@ -238,22 +271,16 @@ def render_p1(
 
     chip_font = load_font_bold(36)
 
-    # Measure chip text height — icons will scale to match this
-    _, chip_text_h = text_size(draw, "X", chip_font)
-    ICON_H = chip_text_h     # icons match text height exactly
-
     cta_text = "READY STOCK \u2022 FAST SHIP"
     cta_font = load_font_bold(18)
     cta_pad_x = 14
     cta_pad_y = 6
-    cta_radius = 8
-    cta_border_w = 2
 
     cta_tw, cta_th = text_size(draw, cta_text, cta_font)
     cta_w = cta_tw + cta_pad_x * 2
     cta_h = cta_th + cta_pad_y * 2
 
-    # Load icons scaled to chip text height, measure groups
+    # Load icons at FIXED ICON_H (not text-derived)
     chip_groups = []
     for i, c in enumerate(features):
         tw, th = text_size(draw, c, chip_font)
@@ -304,7 +331,7 @@ def render_p1(
 
     # DRAW ORDER: text first, then hero on top
 
-    # Draw Brand — same left edge as model (no +2 nudge)
+    # Draw Brand
     draw_text_align_left(draw, header_left, header_top,
                          brand_text, brand_font, (20, 20, 20, 255))
 
@@ -312,7 +339,7 @@ def render_p1(
     draw_text_align_left(draw, header_left, model_y,
                          model_text, model_font, (20, 20, 20, 255))
 
-    # Size badge (chip3)
+    # Size badge (chip3) — uses standardized sticker
     size_text = (chip3 or "").strip()
     if size_text:
         badge_font = load_font_bold(38)
@@ -326,18 +353,13 @@ def render_p1(
         bx0 = bx1 - bw
         by1 = by0 + bh
 
-        draw_rounded_rect(draw, (bx0, by0, bx1, by1), radius=14,
-                          fill=(245, 204, 74, 255))
-        draw.rounded_rectangle((bx0, by0, bx1, by1), radius=14,
-                               outline=(20, 20, 20, 255), width=3)
-        draw_text_centered_in_box(draw, bx0, by0, bw, bh,
-                                  size_text, badge_font, (20, 20, 20, 255))
+        draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
     # Composite hero ON TOP of text
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # 8) CHIPS — icon + text, centered row
+    # 8) CHIPS — icon + text, centered row, FIXED icon size
     chip_y_top = hero_bottom + CHIP_TOP_GAP
     chip_y_center = chip_y_top + chip_row_h // 2
     chip_start_x = (W - total_chips_w) // 2
@@ -356,13 +378,13 @@ def render_p1(
         bbox = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
         text_y = chip_y_center - text_h // 2 - bbox[1]
-        draw.text((text_x, text_y), c, font=chip_font, fill=(30, 30, 30, 255))
+        draw.text((text_x, text_y), c, font=chip_font, fill=CHIP_TEXT_COLOR)
 
         cur_x += gw + CHIP_GAP_X
 
     chips_bottom = chip_y_top + chip_row_h
 
-    # 9) CTA — below chips, centered
+    # 9) CTA — below chips, standardized sticker pill
     cta_x0 = (W - cta_w) // 2
     cta_y0 = chips_bottom + CTA_GAP_Y
     cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
@@ -370,13 +392,7 @@ def render_p1(
     cta_x1 = cta_x0 + cta_w
     cta_y1 = cta_y0 + cta_h
 
-    draw_rounded_rect(draw, (cta_x0, cta_y0, cta_x1, cta_y1),
-                      radius=cta_radius, fill=(245, 204, 74, 255))
-    draw.rounded_rectangle((cta_x0, cta_y0, cta_x1, cta_y1),
-                           radius=cta_radius, outline=(20, 20, 20, 255),
-                           width=cta_border_w)
-    draw_text_centered_in_box(draw, cta_x0, cta_y0, cta_w, cta_h,
-                              cta_text, cta_font, (20, 20, 20, 255))
+    draw_sticker_pill(draw, cta_x0, cta_y0, cta_x1, cta_y1, cta_text, cta_font)
 
     # 10) Output PNG
     out = BytesIO()
