@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12F"
+VERSION = "P1 v2026-02-12H"
 
 # ---------- R2 client ----------
 def r2_client():
@@ -128,6 +128,35 @@ def trim_transparent(im: Image.Image, pad: int = 0) -> Image.Image:
     return im.crop((x0, y0, x1, y1))
 
 
+# ---------- Icon loading ----------
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets", "p1")
+BG_DIR = os.path.join(ASSETS_DIR, "backgrounds")
+ICONS_DIR = os.path.join(ASSETS_DIR, "icons")
+
+
+def load_icon(filename: str, target_h: int) -> Optional[Image.Image]:
+    """Load a PNG icon from assets/p1/icons/ and scale to target height."""
+    path = os.path.join(ICONS_DIR, filename)
+    if not os.path.exists(path):
+        return None
+    try:
+        icon = Image.open(path).convert("RGBA")
+        # Scale proportionally to target height
+        ratio = target_h / icon.height
+        new_w = max(1, int(icon.width * ratio))
+        icon = icon.resize((new_w, target_h), Image.LANCZOS)
+        return icon
+    except Exception:
+        return None
+
+
+# Map chip index to icon filename
+CHIP_ICONS = {
+    0: "bearings_1.png",     # chip1 = bearings
+    1: "Gear_Ratio_1.png",   # chip2 = gear ratio
+}
+
+
 # ---------- Routes ----------
 @app.get("/health")
 def health():
@@ -146,10 +175,6 @@ def get_image(key: str):
     out = BytesIO()
     hero.save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
-
-
-ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets", "p1")
-BG_DIR = os.path.join(ASSETS_DIR, "backgrounds")
 
 
 def load_bg(theme: str):
@@ -189,8 +214,10 @@ def render_p1(
     BOTTOM_SAFE = 28
 
     CHIP_TOP_GAP = 16
-    CHIP_GAP_X = 30        # wide gap between chips
-    CTA_GAP_Y = 10         # gap: chip row -> CTA
+    CHIP_GAP_X = 40
+    CTA_GAP_Y = 20
+    ICON_TEXT_GAP = 10
+    ICON_H = 40             # icon scaled to this height
 
     header_left = pad
     header_top = top_pad
@@ -212,10 +239,7 @@ def render_p1(
     features = [(chip1 or "").strip(), (chip2 or "").strip()]
     features = [c for c in features if c]
 
-    chip_font = load_font_bold(30)
-    chip_pad_x = 14
-    chip_pad_y = 8
-    chip_radius = 10
+    chip_font = load_font_bold(32)
 
     cta_text = "READY STOCK \u2022 FAST SHIP"
     cta_font = load_font_bold(18)
@@ -228,21 +252,28 @@ def render_p1(
     cta_w = cta_tw + cta_pad_x * 2
     cta_h = cta_th + cta_pad_y * 2
 
-    _, sample_chip_h = text_size(draw, "X", chip_font)
-    chip_row_h = sample_chip_h + chip_pad_y * 2
-
-    # Pre-measure each chip box width
-    chip_boxes = []
-    for c in features:
+    # Load icons and measure chip groups
+    chip_groups = []
+    for i, c in enumerate(features):
         tw, th = text_size(draw, c, chip_font)
-        bw = tw + chip_pad_x * 2
-        bh = th + chip_pad_y * 2
-        chip_boxes.append((c, bw, bh))
+        icon_file = CHIP_ICONS.get(i)
+        icon = load_icon(icon_file, ICON_H) if icon_file else None
+        icon_w = icon.width if icon else 0
 
-    # Total width of chip row (all chips + gaps)
+        if icon:
+            group_w = icon_w + ICON_TEXT_GAP + tw
+        else:
+            group_w = tw
+
+        group_h = max(ICON_H, th)
+        chip_groups.append((c, tw, th, group_w, group_h, icon, icon_w))
+
+    chip_row_h = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
+
     total_chips_w = 0
-    if chip_boxes:
-        total_chips_w = sum(bw for _, bw, _ in chip_boxes) + CHIP_GAP_X * (len(chip_boxes) - 1)
+    if chip_groups:
+        total_chips_w = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
+        total_chips_w += CHIP_GAP_X * (len(chip_groups) - 1)
 
     needed_below = CHIP_TOP_GAP + chip_row_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
 
@@ -261,7 +292,6 @@ def render_p1(
     px = max(px, pad)
     px = min(px, W - new_w - 10)
 
-    # Hero start: 22% from top (slightly higher to give more bottom space)
     py = int(H * 0.22)
 
     max_hero_bottom = H - needed_below
@@ -306,32 +336,33 @@ def render_p1(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # 8) CHIPS — horizontal row, CENTERED on canvas (above CTA)
-    chip_y = hero_bottom + CHIP_TOP_GAP
-
-    # Center the entire chip row horizontally
+    # 8) CHIPS — icon + text, no box, horizontal row, centered
+    chip_y_top = hero_bottom + CHIP_TOP_GAP
+    chip_y_center = chip_y_top + chip_row_h // 2
     chip_start_x = (W - total_chips_w) // 2
 
-    chip_x = chip_start_x
-    for c, bw, bh in chip_boxes:
-        draw_rounded_rect(
-            draw,
-            (chip_x, chip_y, chip_x + bw, chip_y + bh),
-            radius=chip_radius,
-            fill=(255, 255, 255, 245),
-        )
-        draw.rounded_rectangle(
-            (chip_x, chip_y, chip_x + bw, chip_y + bh),
-            radius=chip_radius,
-            outline=(60, 60, 60, 255),
-            width=2,
-        )
-        draw_text_centered_in_box(draw, chip_x, chip_y, bw, bh,
-                                  c, chip_font, (30, 30, 30, 255))
+    cur_x = chip_start_x
+    for c, tw, th, gw, gh, icon, icon_w in chip_groups:
+        if icon:
+            # Paste icon (vertically centered in chip row)
+            icon_y = chip_y_center - icon.height // 2
+            canvas.alpha_composite(icon, (cur_x, icon_y))
+            draw = ImageDraw.Draw(canvas)  # refresh after composite
 
-        chip_x += bw + CHIP_GAP_X
+            # Text after icon
+            text_x = cur_x + icon_w + ICON_TEXT_GAP
+        else:
+            text_x = cur_x
 
-    chips_bottom = chip_y + chip_row_h
+        # Text vertically centered
+        bbox = draw.textbbox((0, 0), c, font=chip_font)
+        text_h = bbox[3] - bbox[1]
+        text_y = chip_y_center - text_h // 2 - bbox[1]
+        draw.text((text_x, text_y), c, font=chip_font, fill=(30, 30, 30, 255))
+
+        cur_x += gw + CHIP_GAP_X
+
+    chips_bottom = chip_y_top + chip_row_h
 
     # 9) CTA — below chips, centered
     cta_x0 = (W - cta_w) // 2
