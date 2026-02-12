@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12B"
+VERSION = "P1 v2026-02-12C"
 
 # ---------- R2 client ----------
 def r2_client():
@@ -102,6 +102,18 @@ def draw_text_align_left(draw, x, y, text, font, fill):
     draw.text((x - left_bearing, y), text, font=font, fill=fill)
 
 
+def draw_text_centered_in_box(draw, box_x0, box_y0, box_w, box_h, text, font, fill):
+    """Draw text perfectly centered inside a box, compensating for textbbox offsets."""
+    bbox = draw.textbbox((0, 0), text, font=font)
+    # bbox gives (left_offset, top_offset, right, bottom)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    # Compensate for the top/left bearing offsets
+    tx = box_x0 + (box_w - text_w) // 2 - bbox[0]
+    ty = box_y0 + (box_h - text_h) // 2 - bbox[1]
+    draw.text((tx, ty), text, font=font, fill=fill)
+
+
 def trim_transparent(im: Image.Image, pad: int = 0) -> Image.Image:
     if im.mode != "RGBA":
         im = im.convert("RGBA")
@@ -115,7 +127,7 @@ def trim_transparent(im: Image.Image, pad: int = 0) -> Image.Image:
     x0 = max(0, x0 - pad)
     y0 = max(0, y0 - pad)
     x1 = min(im.width, x1 + pad)
-    y1 = min(im.height, y1 + pad)  # FIXED: was x1 + pad
+    y1 = min(im.height, y1 + pad)
     return im.crop((x0, y0, x1, y1))
 
 
@@ -162,14 +174,14 @@ def render_p1(
     theme: str = Query("yellow"),
 ):
     """
-    Shopee P1 (1000x1000) compositor — RASCAL style v3.
+    Shopee P1 (1000x1000) compositor — RASCAL style v3c.
 
     Layout (matching RASCAL reference):
     - Brand/Model: top-left, model is HUGE bold
     - Size badge (chip3): top-right, yellow pill
-    - Hero reel: large (~65%), center-right, OVERLAPS text zone
+    - Hero reel: large (~62%), center-right, overlaps text zone
     - Chips (chip1, chip2): bottom-left below hero
-    - CTA: bottom-center, yellow pill
+    - CTA: anchored to bottom, small, centered
     """
     # 1) Load hero image from R2
     data = r2_get_object_bytes(key)
@@ -187,12 +199,12 @@ def render_p1(
     # 3) Layout constants
     pad = 56
     top_pad = 44
-    BOTTOM_SAFE = 56
-    CHIP_TOP_GAP = 20
-    CHIP_GAP_Y = 14
-    CTA_GAP_Y = 18
+    BOTTOM_SAFE = 40      # margin from canvas bottom
 
-    # Header text zone (left side only — hero will overlap)
+    CHIP_TOP_GAP = 16     # gap: hero bottom -> first chip
+    CHIP_GAP_Y = 12       # gap between chip rows
+    CTA_GAP_Y = 14        # gap: last chip -> CTA
+
     header_left = pad
     header_top = top_pad
     header_max_w = int(W * 0.55) - header_left
@@ -220,17 +232,18 @@ def render_p1(
     features = [(chip1 or "").strip(), (chip2 or "").strip()]
     features = [c for c in features if c]
 
-    chip_font = load_font_bold(40)
-    chip_pad_x = 20
-    chip_pad_y = 12
-    chip_radius = 14
+    chip_font = load_font_bold(32)       # smaller chip font
+    chip_pad_x = 16
+    chip_pad_y = 10
+    chip_radius = 12
 
+    # CTA — SMALL, anchored to bottom (half the old size)
     cta_text = "READY STOCK \u2022 FAST SHIP"
-    cta_font = load_font_bold(36)
-    cta_pad_x = 22
-    cta_pad_y = 10
-    cta_radius = 14
-    cta_border_w = 3
+    cta_font = load_font_bold(22)        # was 36, now ~half
+    cta_pad_x = 16
+    cta_pad_y = 8
+    cta_radius = 10
+    cta_border_w = 2
 
     cta_tw, cta_th = text_size(draw, cta_text, cta_font)
     cta_w = cta_tw + cta_pad_x * 2
@@ -248,11 +261,11 @@ def render_p1(
     needed_below = CHIP_TOP_GAP + chips_block_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
 
     # ============================================================
-    # 7) HERO — RASCAL scale: ~65% height, center-right, overlaps text
+    # 7) HERO — ~62% height, lower and right of center
     # ============================================================
     hero_w, hero_h = hero.size
 
-    TARGET_H_RATIO = 0.65
+    TARGET_H_RATIO = 0.62
     target_h = int(H * TARGET_H_RATIO)
     scale = target_h / hero_h
 
@@ -260,15 +273,15 @@ def render_p1(
     new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Horizontal: center with slight right shift (like RASCAL)
-    px = (W - new_w) // 2 + 40
+    # Horizontal: center with more right shift
+    px = (W - new_w) // 2 + 80
     px = max(px, pad)
     px = min(px, W - new_w - 10)
 
-    # Vertical: start ~15% from top (hero overlaps brand/model zone)
-    py = int(H * 0.15)
+    # Vertical: start ~22% from top (lower than before)
+    py = int(H * 0.22)
 
-    # Bottom-fit clamp: push hero up if needed so chips+CTA always fit
+    # Bottom-fit clamp: push hero up only if needed
     max_hero_bottom = H - needed_below
     if py + new_h > max_hero_bottom:
         py = max_hero_bottom - new_h
@@ -288,7 +301,7 @@ def render_p1(
     draw_text_align_left(draw, header_left, model_y,
                          model_text, model_font, (20, 20, 20, 255))
 
-    # Draw size badge (chip3) — top-right yellow pill
+    # Size badge (chip3) — top-right yellow pill
     size_text = (chip3 or "").strip()
     if size_text:
         badge_font = load_font_bold(38)
@@ -306,17 +319,12 @@ def render_p1(
                           fill=(245, 204, 74, 255))
         draw.rounded_rectangle((bx0, by0, bx1, by1), radius=14,
                                outline=(20, 20, 20, 255), width=3)
+        draw_text_centered_in_box(draw, bx0, by0, bw, bh,
+                                  size_text, badge_font, (20, 20, 20, 255))
 
-        bbox = draw.textbbox((0, 0), size_text, font=badge_font)
-        tw2 = bbox[2] - bbox[0]
-        th2 = bbox[3] - bbox[1]
-        tx = bx0 + (bw - tw2) // 2
-        ty = by0 + (bh - th2) // 2 - 1
-        draw.text((tx, ty), size_text, font=badge_font, fill=(20, 20, 20, 255))
-
-    # Composite hero ON TOP of text (RASCAL: reel overlaps brand/model)
+    # Composite hero ON TOP of text
     canvas.alpha_composite(hero_rs, (px, py))
-    draw = ImageDraw.Draw(canvas)  # refresh draw after composite
+    draw = ImageDraw.Draw(canvas)
 
     # ============================================================
     # 8) CHIPS — bottom-left, below hero
@@ -330,6 +338,7 @@ def render_p1(
         bw = tw + chip_pad_x * 2
         bh = th + chip_pad_y * 2
 
+        # Safety: skip only if truly no room
         if chip_y + bh > H - BOTTOM_SAFE - cta_h - CTA_GAP_Y:
             break
 
@@ -345,22 +354,18 @@ def render_p1(
             outline=(60, 60, 60, 255),
             width=2,
         )
-
-        bbox = draw.textbbox((0, 0), c, font=chip_font)
-        th2 = bbox[3] - bbox[1]
-        tx = chip_x + chip_pad_x
-        ty = chip_y + (bh - th2) // 2 - 1
-        draw.text((tx, ty), c, font=chip_font, fill=(30, 30, 30, 255))
+        draw_text_centered_in_box(draw, chip_x, chip_y, bw, bh,
+                                  c, chip_font, (30, 30, 30, 255))
 
         chips_bottom = chip_y + bh
         chip_y += bh + CHIP_GAP_Y
 
     # ============================================================
-    # 9) CTA — below chips, centered
+    # 9) CTA — ANCHORED TO BOTTOM, small, centered
     # ============================================================
     cta_x0 = (W - cta_w) // 2
-    cta_y0 = chips_bottom + CTA_GAP_Y
-    cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
+    # Pin to bottom with BOTTOM_SAFE margin
+    cta_y0 = H - BOTTOM_SAFE - cta_h
 
     cta_x1 = cta_x0 + cta_w
     cta_y1 = cta_y0 + cta_h
@@ -370,17 +375,12 @@ def render_p1(
     draw.rounded_rectangle((cta_x0, cta_y0, cta_x1, cta_y1),
                            radius=cta_radius, outline=(20, 20, 20, 255),
                            width=cta_border_w)
-
-    bbox = draw.textbbox((0, 0), cta_text, font=cta_font)
-    tw2 = bbox[2] - bbox[0]
-    th2 = bbox[3] - bbox[1]
-    tx = cta_x0 + (cta_w - tw2) // 2
-    ty = cta_y0 + (cta_h - th2) // 2 - 1
-    draw.text((tx, ty), cta_text, font=cta_font, fill=(20, 20, 20, 255))
+    draw_text_centered_in_box(draw, cta_x0, cta_y0, cta_w, cta_h,
+                              cta_text, cta_font, (20, 20, 20, 255))
 
     # DEBUG version stamp (remove later)
-    draw.text((10, H - 36), VERSION, font=load_font_regular(22),
-              fill=(255, 0, 0, 180))
+    draw.text((10, H - 24), VERSION, font=load_font_regular(16),
+              fill=(255, 0, 0, 140))
 
     # 10) Output PNG
     out = BytesIO()
