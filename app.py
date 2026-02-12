@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12O"
+VERSION = "P1 v2026-02-12P"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -34,10 +34,12 @@ DIVIDER_COLOR = (80, 80, 80, 180)
 CHIP_TEXT_COLOR = (30, 30, 30, 255)
 
 # ======================== GLOW SETTINGS ===============================
-GLOW_RADIUS = 400          # tightened — stays behind reel, clears header
+GLOW_W = 450               # horizontal radius — wider to match reel shape
+GLOW_H = 300               # vertical radius — shorter to clear header text
 GLOW_COLOR = (255, 255, 255)  # white glow
-GLOW_ALPHA = 110           # ~43% — higher intensity in tighter area
-GLOW_BLUR = 60             # sharper falloff, no fog on text
+GLOW_ALPHA = 80            # ~31% — subtle studio lift
+GLOW_BLUR = 45             # crisp falloff, no fog
+GLOW_Y_OFFSET = 40         # push glow center down away from header
 
 # =====================================================================
 
@@ -153,32 +155,31 @@ def draw_sticker_pill(draw, x0, y0, x1, y1, text, font):
 
 
 def draw_radial_glow(canvas: Image.Image, center_x: int, center_y: int,
-                     radius: int = GLOW_RADIUS,
+                     glow_w: int = GLOW_W,
+                     glow_h: int = GLOW_H,
                      color: tuple = GLOW_COLOR,
                      alpha: int = GLOW_ALPHA,
-                     blur: int = GLOW_BLUR):
+                     blur: int = GLOW_BLUR,
+                     y_offset: int = GLOW_Y_OFFSET):
     """
-    Draw a soft radial glow behind the hero to create depth/separation.
-    Works by drawing a filled ellipse on a separate layer, blurring it,
-    then compositing onto the canvas.
+    Draw a soft elliptical glow behind the hero for depth/separation.
+    Ellipse is wider than tall to match reel shape and avoid fogging header.
     """
-    # Create glow layer same size as canvas
+    cy = center_y + y_offset
+
     glow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow)
 
-    # Draw a filled ellipse at the center
-    x0 = center_x - radius
-    y0 = center_y - radius
-    x1 = center_x + radius
-    y1 = center_y + radius
+    x0 = center_x - glow_w
+    y0 = cy - glow_h
+    x1 = center_x + glow_w
+    y1 = cy + glow_h
 
     glow_draw.ellipse((x0, y0, x1, y1),
                       fill=(color[0], color[1], color[2], alpha))
 
-    # Blur for soft falloff
     glow = glow.filter(ImageFilter.GaussianBlur(radius=blur))
 
-    # Composite glow onto canvas
     canvas.alpha_composite(glow)
 
 
