@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12Q"
+VERSION = "P1 v2026-02-12R"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -34,12 +34,12 @@ DIVIDER_COLOR = (80, 80, 80, 180)
 CHIP_TEXT_COLOR = (30, 30, 30, 255)
 
 # ======================== GLOW SETTINGS ===============================
-GLOW_W = 420               # horizontal radius
-GLOW_H = 280               # vertical radius — shorter to protect header
+GLOW_W = 500               # horizontal spread
+GLOW_H = 250               # vertical spread — stays below header
 GLOW_COLOR = (255, 255, 255)
-GLOW_ALPHA = 100           # ~39% — strong center, tight spread
-GLOW_BLUR = 40             # crisp falloff, no fog creep
-GLOW_Y_OFFSET = 50         # push glow center further down from header
+GLOW_ALPHA = 60            # subtle breath of light
+GLOW_Y_OFFSET = 50         # push center down from header
+GLOW_NOISE = 3             # noise amplitude to break banding
 
 # =====================================================================
 
@@ -158,28 +158,46 @@ def draw_radial_glow(canvas: Image.Image, center_x: int, center_y: int,
                      glow_w: int = GLOW_W,
                      glow_h: int = GLOW_H,
                      color: tuple = GLOW_COLOR,
-                     alpha: int = GLOW_ALPHA,
-                     blur: int = GLOW_BLUR,
-                     y_offset: int = GLOW_Y_OFFSET):
+                     max_alpha: int = GLOW_ALPHA,
+                     y_offset: int = GLOW_Y_OFFSET,
+                     noise_amp: int = GLOW_NOISE):
     """
-    Draw a soft elliptical glow behind the hero for depth/separation.
-    Ellipse is wider than tall to match reel shape and avoid fogging header.
+    Draw a smooth elliptical radial gradient glow with dithering noise
+    to eliminate banding artifacts. Uses numpy for fast pixel ops.
     """
+    import numpy as np
+
     cy = center_y + y_offset
+    w, h = canvas.size
 
-    glow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    glow_draw = ImageDraw.Draw(glow)
+    # Create coordinate grids
+    y_coords, x_coords = np.mgrid[0:h, 0:w]
 
-    x0 = center_x - glow_w
-    y0 = cy - glow_h
-    x1 = center_x + glow_w
-    y1 = cy + glow_h
+    # Normalized elliptical distance (0 at center, 1 at edge)
+    dx = (x_coords - center_x) / max(glow_w, 1)
+    dy = (y_coords - cy) / max(glow_h, 1)
+    dist = np.sqrt(dx * dx + dy * dy)
 
-    glow_draw.ellipse((x0, y0, x1, y1),
-                      fill=(color[0], color[1], color[2], alpha))
+    # Smooth falloff: quadratic ease-out, clamp to [0, 1]
+    falloff = np.clip(1.0 - dist, 0.0, 1.0)
+    falloff = falloff * falloff  # quadratic for smoother fade
 
-    glow = glow.filter(ImageFilter.GaussianBlur(radius=blur))
+    # Alpha channel with dithering noise to break banding
+    alpha = (falloff * max_alpha).astype(np.float32)
+    if noise_amp > 0:
+        noise = np.random.uniform(-noise_amp, noise_amp, alpha.shape).astype(np.float32)
+        alpha = np.clip(alpha + noise, 0, 255)
 
+    alpha = alpha.astype(np.uint8)
+
+    # Build RGBA glow layer
+    glow_data = np.zeros((h, w, 4), dtype=np.uint8)
+    glow_data[:, :, 0] = color[0]
+    glow_data[:, :, 1] = color[1]
+    glow_data[:, :, 2] = color[2]
+    glow_data[:, :, 3] = alpha
+
+    glow = Image.fromarray(glow_data, "RGBA")
     canvas.alpha_composite(glow)
 
 
