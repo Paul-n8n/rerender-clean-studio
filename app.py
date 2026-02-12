@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12E"
+VERSION = "P1 v2026-02-12F"
 
 # ---------- R2 client ----------
 def r2_client():
@@ -189,8 +189,8 @@ def render_p1(
     BOTTOM_SAFE = 28
 
     CHIP_TOP_GAP = 16
-    CHIP_GAP_X = 20        # UPDATED: was 10, wider gap between chips
-    CTA_GAP_Y = 12
+    CHIP_GAP_X = 30        # wide gap between chips
+    CTA_GAP_Y = 10         # gap: chip row -> CTA
 
     header_left = pad
     header_top = top_pad
@@ -231,9 +231,22 @@ def render_p1(
     _, sample_chip_h = text_size(draw, "X", chip_font)
     chip_row_h = sample_chip_h + chip_pad_y * 2
 
+    # Pre-measure each chip box width
+    chip_boxes = []
+    for c in features:
+        tw, th = text_size(draw, c, chip_font)
+        bw = tw + chip_pad_x * 2
+        bh = th + chip_pad_y * 2
+        chip_boxes.append((c, bw, bh))
+
+    # Total width of chip row (all chips + gaps)
+    total_chips_w = 0
+    if chip_boxes:
+        total_chips_w = sum(bw for _, bw, _ in chip_boxes) + CHIP_GAP_X * (len(chip_boxes) - 1)
+
     needed_below = CHIP_TOP_GAP + chip_row_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
 
-    # 7) HERO — ~62% height, slightly higher for chip/CTA space
+    # 7) HERO — ~62% height
     hero_w, hero_h = hero.size
 
     TARGET_H_RATIO = 0.62
@@ -248,8 +261,8 @@ def render_p1(
     px = max(px, pad)
     px = min(px, W - new_w - 10)
 
-    # UPDATED: 24% from top (was 28%) — slightly higher to give bottom space
-    py = int(H * 0.24)
+    # Hero start: 22% from top (slightly higher to give more bottom space)
+    py = int(H * 0.22)
 
     max_hero_bottom = H - needed_below
     if py + new_h > max_hero_bottom:
@@ -293,18 +306,14 @@ def render_p1(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # 8) CHIPS — horizontal row below hero, left-aligned
-    chip_x = pad
+    # 8) CHIPS — horizontal row, CENTERED on canvas (above CTA)
     chip_y = hero_bottom + CHIP_TOP_GAP
 
-    for c in features:
-        tw, th = text_size(draw, c, chip_font)
-        bw = tw + chip_pad_x * 2
-        bh = th + chip_pad_y * 2
+    # Center the entire chip row horizontally
+    chip_start_x = (W - total_chips_w) // 2
 
-        if chip_x + bw > W - pad:
-            break
-
+    chip_x = chip_start_x
+    for c, bw, bh in chip_boxes:
         draw_rounded_rect(
             draw,
             (chip_x, chip_y, chip_x + bw, chip_y + bh),
@@ -327,7 +336,6 @@ def render_p1(
     # 9) CTA — below chips, centered
     cta_x0 = (W - cta_w) // 2
     cta_y0 = chips_bottom + CTA_GAP_Y
-    # Don't let it go below bottom safe
     cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
 
     cta_x1 = cta_x0 + cta_w
