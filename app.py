@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12I"
+VERSION = "P1 v2026-02-12J"
 
 # ---------- R2 client ----------
 def r2_client():
@@ -135,7 +135,7 @@ ICONS_DIR = os.path.join(ASSETS_DIR, "icons")
 
 
 def load_icon(filename: str, target_h: int) -> Optional[Image.Image]:
-    """Load a PNG icon from assets/p1/icons/ and scale to target height."""
+    """Load a PNG icon and scale to target height (proportional width)."""
     path = os.path.join(ICONS_DIR, filename)
     if not os.path.exists(path):
         return None
@@ -212,16 +212,15 @@ def render_p1(
     BOTTOM_SAFE = 28
 
     CHIP_TOP_GAP = 16
-    CHIP_GAP_X = 50         # wide gap between chip groups
+    CHIP_GAP_X = 50
     CTA_GAP_Y = 20
-    ICON_TEXT_GAP = 14       # gap between icon and text
-    ICON_H = 60              # icon height — thumb-safe at Shopee grid
+    ICON_TEXT_GAP = 8        # tighter gap between icon and text
 
     header_left = pad
     header_top = top_pad
     header_max_w = int(W * 0.55) - header_left
 
-    # 4) BRAND text
+    # 4) BRAND text — aligned to same left edge as model
     brand_text = (brand or "").strip().upper()
     brand_font = fit_text(draw, brand_text, max_w=header_max_w,
                           start_size=56, min_size=34, loader=load_font_regular)
@@ -237,7 +236,11 @@ def render_p1(
     features = [(chip1 or "").strip(), (chip2 or "").strip()]
     features = [c for c in features if c]
 
-    chip_font = load_font_bold(36)       # bigger for thumb readability
+    chip_font = load_font_bold(36)
+
+    # Measure chip text height — icons will scale to match this
+    _, chip_text_h = text_size(draw, "X", chip_font)
+    ICON_H = chip_text_h     # icons match text height exactly
 
     cta_text = "READY STOCK \u2022 FAST SHIP"
     cta_font = load_font_bold(18)
@@ -250,7 +253,7 @@ def render_p1(
     cta_w = cta_tw + cta_pad_x * 2
     cta_h = cta_th + cta_pad_y * 2
 
-    # Load icons and measure chip groups
+    # Load icons scaled to chip text height, measure groups
     chip_groups = []
     for i, c in enumerate(features):
         tw, th = text_size(draw, c, chip_font)
@@ -301,9 +304,11 @@ def render_p1(
 
     # DRAW ORDER: text first, then hero on top
 
-    draw_text_align_left(draw, header_left + 2, header_top,
+    # Draw Brand — same left edge as model (no +2 nudge)
+    draw_text_align_left(draw, header_left, header_top,
                          brand_text, brand_font, (20, 20, 20, 255))
 
+    # Draw Model
     draw_text_align_left(draw, header_left, model_y,
                          model_text, model_font, (20, 20, 20, 255))
 
