@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12L"
+VERSION = "P1 v2026-02-12M"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -26,9 +26,11 @@ STICKER_OUTLINE = (20, 20, 20, 255)
 STICKER_TEXT = (20, 20, 20, 255)
 
 # ======================== CHIP LAYOUT STANDARDS =======================
-ICON_SIZE = 70             # icons fit within 70x70 square bounding box
-ICON_TEXT_GAP = 14
-CHIP_GAP_X = 70
+ICON_SIZE = 80             # icons fit within 80x80 square bounding box
+ICON_TEXT_GAP = 8          # tight gap between icon and chip text
+CHIP_GAP_X = 50            # space on each side of the divider
+DIVIDER_WIDTH = 2          # vertical line thickness
+DIVIDER_COLOR = (80, 80, 80, 180)  # dark grey, slightly transparent
 CHIP_TEXT_COLOR = (30, 30, 30, 255)
 
 # =====================================================================
@@ -179,7 +181,7 @@ def load_icon(filename: str, box_size: int) -> Optional[Image.Image]:
     try:
         icon = Image.open(path).convert("RGBA")
 
-        # Scale to fit within the square (use the limiting dimension)
+        # Scale to fit within the square
         scale = min(box_size / icon.width, box_size / icon.height)
         new_w = max(1, int(icon.width * scale))
         new_h = max(1, int(icon.height * scale))
@@ -298,8 +300,6 @@ def render_p1(
         tw, th = text_size(draw, c, chip_font)
         icon_file = CHIP_ICONS.get(i)
         icon = load_icon(icon_file, ICON_SIZE) if icon_file else None
-
-        # Icon is always ICON_SIZE x ICON_SIZE (or None)
         icon_w = ICON_SIZE if icon else 0
 
         if icon:
@@ -312,10 +312,11 @@ def render_p1(
 
     chip_row_h = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
 
-    total_chips_w = 0
-    if chip_groups:
-        total_chips_w = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
-        total_chips_w += CHIP_GAP_X * (len(chip_groups) - 1)
+    # Total width: chip1_group + gap + divider + gap + chip2_group
+    # Each gap = CHIP_GAP_X // 2 on each side of divider
+    num_dividers = max(0, len(chip_groups) - 1)
+    total_chips_w = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
+    total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
 
     needed_below = CHIP_TOP_GAP + chip_row_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
 
@@ -371,13 +372,14 @@ def render_p1(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # 8) CHIPS — icon + text, centered row
+    # 8) CHIPS — icon + text, centered row, with vertical dividers
     chip_y_top = hero_bottom + CHIP_TOP_GAP
     chip_y_center = chip_y_top + chip_row_h // 2
     chip_start_x = (W - total_chips_w) // 2
 
     cur_x = chip_start_x
-    for c, tw, th, gw, gh, icon, icon_w in chip_groups:
+    for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
+        # Draw icon
         if icon:
             icon_y = chip_y_center - ICON_SIZE // 2
             canvas.alpha_composite(icon, (cur_x, icon_y))
@@ -387,12 +389,24 @@ def render_p1(
         else:
             text_x = cur_x
 
+        # Draw chip text (vertically centered)
         bbox = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
         text_y = chip_y_center - text_h // 2 - bbox[1]
         draw.text((text_x, text_y), c, font=chip_font, fill=CHIP_TEXT_COLOR)
 
-        cur_x += gw + CHIP_GAP_X
+        cur_x += gw
+
+        # Draw vertical divider AFTER this chip (if not the last)
+        if idx < len(chip_groups) - 1:
+            div_x = cur_x + CHIP_GAP_X // 2
+            div_y_top = chip_y_center - int(chip_row_h * 0.35)
+            div_y_bot = chip_y_center + int(chip_row_h * 0.35)
+            draw.line(
+                [(div_x, div_y_top), (div_x, div_y_bot)],
+                fill=DIVIDER_COLOR, width=DIVIDER_WIDTH
+            )
+            cur_x += CHIP_GAP_X + DIVIDER_WIDTH
 
     chips_bottom = chip_y_top + chip_row_h
 
