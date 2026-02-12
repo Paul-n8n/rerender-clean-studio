@@ -6,7 +6,7 @@ import boto3
 from botocore.config import Config
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 app = FastAPI()
 
@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12M"
+VERSION = "P1 v2026-02-12N"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -26,12 +26,18 @@ STICKER_OUTLINE = (20, 20, 20, 255)
 STICKER_TEXT = (20, 20, 20, 255)
 
 # ======================== CHIP LAYOUT STANDARDS =======================
-ICON_SIZE = 80             # icons fit within 80x80 square bounding box
-ICON_TEXT_GAP = 8          # tight gap between icon and chip text
-CHIP_GAP_X = 50            # space on each side of the divider
-DIVIDER_WIDTH = 2          # vertical line thickness
-DIVIDER_COLOR = (80, 80, 80, 180)  # dark grey, slightly transparent
+ICON_SIZE = 80
+ICON_TEXT_GAP = 8
+CHIP_GAP_X = 50
+DIVIDER_WIDTH = 2
+DIVIDER_COLOR = (80, 80, 80, 180)
 CHIP_TEXT_COLOR = (30, 30, 30, 255)
+
+# ======================== GLOW SETTINGS ===============================
+GLOW_RADIUS = 520          # spread of the glow
+GLOW_COLOR = (255, 255, 255)  # white glow
+GLOW_ALPHA = 90            # ~35% opacity — subtle but visible
+GLOW_BLUR = 80             # gaussian blur radius for soft falloff
 
 # =====================================================================
 
@@ -146,6 +152,36 @@ def draw_sticker_pill(draw, x0, y0, x1, y1, text, font):
                               text, font, STICKER_TEXT)
 
 
+def draw_radial_glow(canvas: Image.Image, center_x: int, center_y: int,
+                     radius: int = GLOW_RADIUS,
+                     color: tuple = GLOW_COLOR,
+                     alpha: int = GLOW_ALPHA,
+                     blur: int = GLOW_BLUR):
+    """
+    Draw a soft radial glow behind the hero to create depth/separation.
+    Works by drawing a filled ellipse on a separate layer, blurring it,
+    then compositing onto the canvas.
+    """
+    # Create glow layer same size as canvas
+    glow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
+
+    # Draw a filled ellipse at the center
+    x0 = center_x - radius
+    y0 = center_y - radius
+    x1 = center_x + radius
+    y1 = center_y + radius
+
+    glow_draw.ellipse((x0, y0, x1, y1),
+                      fill=(color[0], color[1], color[2], alpha))
+
+    # Blur for soft falloff
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=blur))
+
+    # Composite glow onto canvas
+    canvas.alpha_composite(glow)
+
+
 def trim_transparent(im: Image.Image, pad: int = 0) -> Image.Image:
     if im.mode != "RGBA":
         im = im.convert("RGBA")
@@ -181,13 +217,11 @@ def load_icon(filename: str, box_size: int) -> Optional[Image.Image]:
     try:
         icon = Image.open(path).convert("RGBA")
 
-        # Scale to fit within the square
         scale = min(box_size / icon.width, box_size / icon.height)
         new_w = max(1, int(icon.width * scale))
         new_h = max(1, int(icon.height * scale))
         icon = icon.resize((new_w, new_h), Image.LANCZOS)
 
-        # Center in a box_size x box_size transparent canvas
         result = Image.new("RGBA", (box_size, box_size), (0, 0, 0, 0))
         offset_x = (box_size - new_w) // 2
         offset_y = (box_size - new_h) // 2
@@ -312,8 +346,6 @@ def render_p1(
 
     chip_row_h = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
 
-    # Total width: chip1_group + gap + divider + gap + chip2_group
-    # Each gap = CHIP_GAP_X // 2 on each side of divider
     num_dividers = max(0, len(chip_groups) - 1)
     total_chips_w = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
     total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
@@ -344,11 +376,13 @@ def render_p1(
 
     hero_bottom = py + new_h
 
-    # DRAW ORDER: text first, then hero on top
+    # DRAW ORDER: text → glow → hero → chips → CTA
 
+    # Draw Brand
     draw_text_align_left(draw, header_left, header_top,
                          brand_text, brand_font, (20, 20, 20, 255))
 
+    # Draw Model
     draw_text_align_left(draw, header_left, model_y,
                          model_text, model_font, (20, 20, 20, 255))
 
@@ -368,7 +402,13 @@ def render_p1(
 
         draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
-    # Composite hero ON TOP of text
+    # RADIAL GLOW — behind hero, centered on hero body
+    glow_cx = px + new_w // 2
+    glow_cy = py + new_h // 2
+    draw_radial_glow(canvas, glow_cx, glow_cy)
+    draw = ImageDraw.Draw(canvas)  # refresh after composite
+
+    # Composite hero ON TOP of glow + text
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
@@ -379,7 +419,6 @@ def render_p1(
 
     cur_x = chip_start_x
     for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
-        # Draw icon
         if icon:
             icon_y = chip_y_center - ICON_SIZE // 2
             canvas.alpha_composite(icon, (cur_x, icon_y))
@@ -389,7 +428,6 @@ def render_p1(
         else:
             text_x = cur_x
 
-        # Draw chip text (vertically centered)
         bbox = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
         text_y = chip_y_center - text_h // 2 - bbox[1]
@@ -397,7 +435,6 @@ def render_p1(
 
         cur_x += gw
 
-        # Draw vertical divider AFTER this chip (if not the last)
         if idx < len(chip_groups) - 1:
             div_x = cur_x + CHIP_GAP_X // 2
             div_y_top = chip_y_center - int(chip_row_h * 0.35)
