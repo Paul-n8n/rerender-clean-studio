@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12H"
+VERSION = "P1 v2026-02-12I"
 
 # ---------- R2 client ----------
 def r2_client():
@@ -141,7 +141,6 @@ def load_icon(filename: str, target_h: int) -> Optional[Image.Image]:
         return None
     try:
         icon = Image.open(path).convert("RGBA")
-        # Scale proportionally to target height
         ratio = target_h / icon.height
         new_w = max(1, int(icon.width * ratio))
         icon = icon.resize((new_w, target_h), Image.LANCZOS)
@@ -150,10 +149,9 @@ def load_icon(filename: str, target_h: int) -> Optional[Image.Image]:
         return None
 
 
-# Map chip index to icon filename
 CHIP_ICONS = {
-    0: "bearings_1.png",     # chip1 = bearings
-    1: "Gear_Ratio_1.png",   # chip2 = gear ratio
+    0: "bearings_1.png",
+    1: "Gear_Ratio_1.png",
 }
 
 
@@ -214,10 +212,10 @@ def render_p1(
     BOTTOM_SAFE = 28
 
     CHIP_TOP_GAP = 16
-    CHIP_GAP_X = 40
+    CHIP_GAP_X = 50         # wide gap between chip groups
     CTA_GAP_Y = 20
-    ICON_TEXT_GAP = 10
-    ICON_H = 40             # icon scaled to this height
+    ICON_TEXT_GAP = 14       # gap between icon and text
+    ICON_H = 60              # icon height — thumb-safe at Shopee grid
 
     header_left = pad
     header_top = top_pad
@@ -239,7 +237,7 @@ def render_p1(
     features = [(chip1 or "").strip(), (chip2 or "").strip()]
     features = [c for c in features if c]
 
-    chip_font = load_font_bold(32)
+    chip_font = load_font_bold(36)       # bigger for thumb readability
 
     cta_text = "READY STOCK \u2022 FAST SHIP"
     cta_font = load_font_bold(18)
@@ -303,11 +301,9 @@ def render_p1(
 
     # DRAW ORDER: text first, then hero on top
 
-    # Draw Brand
     draw_text_align_left(draw, header_left + 2, header_top,
                          brand_text, brand_font, (20, 20, 20, 255))
 
-    # Draw Model
     draw_text_align_left(draw, header_left, model_y,
                          model_text, model_font, (20, 20, 20, 255))
 
@@ -336,7 +332,7 @@ def render_p1(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # 8) CHIPS — icon + text, no box, horizontal row, centered
+    # 8) CHIPS — icon + text, centered row
     chip_y_top = hero_bottom + CHIP_TOP_GAP
     chip_y_center = chip_y_top + chip_row_h // 2
     chip_start_x = (W - total_chips_w) // 2
@@ -344,17 +340,14 @@ def render_p1(
     cur_x = chip_start_x
     for c, tw, th, gw, gh, icon, icon_w in chip_groups:
         if icon:
-            # Paste icon (vertically centered in chip row)
             icon_y = chip_y_center - icon.height // 2
             canvas.alpha_composite(icon, (cur_x, icon_y))
-            draw = ImageDraw.Draw(canvas)  # refresh after composite
+            draw = ImageDraw.Draw(canvas)
 
-            # Text after icon
             text_x = cur_x + icon_w + ICON_TEXT_GAP
         else:
             text_x = cur_x
 
-        # Text vertically centered
         bbox = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
         text_y = chip_y_center - text_h // 2 - bbox[1]
