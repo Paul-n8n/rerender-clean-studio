@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12P"
+VERSION = "P1 v2026-02-12Q"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -34,12 +34,12 @@ DIVIDER_COLOR = (80, 80, 80, 180)
 CHIP_TEXT_COLOR = (30, 30, 30, 255)
 
 # ======================== GLOW SETTINGS ===============================
-GLOW_W = 450               # horizontal radius — wider to match reel shape
-GLOW_H = 300               # vertical radius — shorter to clear header text
-GLOW_COLOR = (255, 255, 255)  # white glow
-GLOW_ALPHA = 80            # ~31% — subtle studio lift
-GLOW_BLUR = 45             # crisp falloff, no fog
-GLOW_Y_OFFSET = 40         # push glow center down away from header
+GLOW_W = 420               # horizontal radius
+GLOW_H = 280               # vertical radius — shorter to protect header
+GLOW_COLOR = (255, 255, 255)
+GLOW_ALPHA = 100           # ~39% — strong center, tight spread
+GLOW_BLUR = 40             # crisp falloff, no fog creep
+GLOW_Y_OFFSET = 50         # push glow center further down from header
 
 # =====================================================================
 
