@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12R"
+VERSION = "P1 v2026-02-12S"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -162,42 +162,46 @@ def draw_radial_glow(canvas: Image.Image, center_x: int, center_y: int,
                      y_offset: int = GLOW_Y_OFFSET,
                      noise_amp: int = GLOW_NOISE):
     """
-    Draw a smooth elliptical radial gradient glow with dithering noise
-    to eliminate banding artifacts. Uses numpy for fast pixel ops.
+    Draw a smooth elliptical glow using multiple concentric ellipses
+    with decreasing alpha + heavy blur to avoid banding.
+    Pure Pillow, no numpy needed.
     """
-    import numpy as np
+    import random
 
     cy = center_y + y_offset
     w, h = canvas.size
 
-    # Create coordinate grids
-    y_coords, x_coords = np.mgrid[0:h, 0:w]
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
 
-    # Normalized elliptical distance (0 at center, 1 at edge)
-    dx = (x_coords - center_x) / max(glow_w, 1)
-    dy = (y_coords - cy) / max(glow_h, 1)
-    dist = np.sqrt(dx * dx + dy * dy)
+    # Draw many concentric ellipses from outside in, increasing alpha
+    steps = 30
+    for i in range(steps):
+        t = i / steps  # 0 = outermost, 1 = center
+        # Shrink ellipse as we go inward
+        ew = int(glow_w * (1.0 - t * 0.8))
+        eh = int(glow_h * (1.0 - t * 0.8))
 
-    # Smooth falloff: quadratic ease-out, clamp to [0, 1]
-    falloff = np.clip(1.0 - dist, 0.0, 1.0)
-    falloff = falloff * falloff  # quadratic for smoother fade
+        # Alpha increases toward center (quadratic)
+        a = int(max_alpha * t * t)
+        # Add tiny noise to break banding
+        if noise_amp > 0:
+            a = max(0, min(255, a + random.randint(-noise_amp, noise_amp)))
 
-    # Alpha channel with dithering noise to break banding
-    alpha = (falloff * max_alpha).astype(np.float32)
-    if noise_amp > 0:
-        noise = np.random.uniform(-noise_amp, noise_amp, alpha.shape).astype(np.float32)
-        alpha = np.clip(alpha + noise, 0, 255)
+        if a <= 0:
+            continue
 
-    alpha = alpha.astype(np.uint8)
+        x0 = center_x - ew
+        y0 = cy - eh
+        x1 = center_x + ew
+        y1 = cy + eh
 
-    # Build RGBA glow layer
-    glow_data = np.zeros((h, w, 4), dtype=np.uint8)
-    glow_data[:, :, 0] = color[0]
-    glow_data[:, :, 1] = color[1]
-    glow_data[:, :, 2] = color[2]
-    glow_data[:, :, 3] = alpha
+        glow_draw.ellipse((x0, y0, x1, y1),
+                          fill=(color[0], color[1], color[2], a))
 
-    glow = Image.fromarray(glow_data, "RGBA")
+    # Heavy blur to smooth the concentric rings into a gradient
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=50))
+
     canvas.alpha_composite(glow)
 
 
