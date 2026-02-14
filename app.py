@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-12S"
+VERSION = "P1 v2026-02-14T"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -25,7 +25,40 @@ STICKER_FILL = (245, 204, 74, 255)
 STICKER_OUTLINE = (20, 20, 20, 255)
 STICKER_TEXT = (20, 20, 20, 255)
 
-# ======================== CHIP LAYOUT STANDARDS =======================
+# ======================== THEME COLOR MAPPING ============================
+# Each theme defines: text color, chip color, divider color, sticker outline
+THEME_COLORS = {
+    "yellow": {
+        "text": (20, 20, 20, 255),
+        "chip_text": (30, 30, 30, 255),
+        "divider": (80, 80, 80, 180),
+        "sticker_outline": (20, 20, 20, 255),
+    },
+    "grey": {
+        "text": (20, 20, 20, 255),
+        "chip_text": (30, 30, 30, 255),
+        "divider": (80, 80, 80, 180),
+        "sticker_outline": (20, 20, 20, 255),
+    },
+    "navy": {
+        "text": (255, 255, 255, 255),
+        "chip_text": (240, 240, 240, 255),
+        "divider": (200, 200, 200, 180),
+        "sticker_outline": (20, 20, 20, 255),
+    },
+    "teal": {
+        "text": (255, 255, 255, 255),
+        "chip_text": (240, 240, 240, 255),
+        "divider": (200, 200, 200, 180),
+        "sticker_outline": (20, 20, 20, 255),
+    },
+}
+
+DEFAULT_THEME_COLORS = THEME_COLORS["yellow"]
+
+
+def get_theme_colors(theme: str) -> dict:
+    return THEME_COLORS.get((theme or "yellow").lower(), DEFAULT_THEME_COLORS)
 ICON_SIZE = 80
 ICON_TEXT_GAP = 8
 CHIP_GAP_X = 50
@@ -312,6 +345,12 @@ def render_p1(
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw = ImageDraw.Draw(canvas)
 
+    # Resolve theme-aware colors
+    tc = get_theme_colors(theme)
+    text_color = tc["text"]
+    chip_text_color = tc["chip_text"]
+    divider_color = tc["divider"]
+
     # 3) Layout constants
     pad = 56
     top_pad = 44
@@ -403,11 +442,11 @@ def render_p1(
 
     # Draw Brand
     draw_text_align_left(draw, header_left, header_top,
-                         brand_text, brand_font, (20, 20, 20, 255))
+                         brand_text, brand_font, text_color)
 
     # Draw Model
     draw_text_align_left(draw, header_left, model_y,
-                         model_text, model_font, (20, 20, 20, 255))
+                         model_text, model_font, text_color)
 
     # Size badge (chip3)
     size_text = (chip3 or "").strip()
@@ -454,7 +493,7 @@ def render_p1(
         bbox = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
         text_y = chip_y_center - text_h // 2 - bbox[1]
-        draw.text((text_x, text_y), c, font=chip_font, fill=CHIP_TEXT_COLOR)
+        draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
 
         cur_x += gw
 
@@ -464,7 +503,7 @@ def render_p1(
             div_y_bot = chip_y_center + int(chip_row_h * 0.35)
             draw.line(
                 [(div_x, div_y_top), (div_x, div_y_bot)],
-                fill=DIVIDER_COLOR, width=DIVIDER_WIDTH
+                fill=divider_color, width=DIVIDER_WIDTH
             )
             cur_x += CHIP_GAP_X + DIVIDER_WIDTH
 
