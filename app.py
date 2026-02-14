@@ -326,7 +326,7 @@ def load_bg(theme: str):
 def render_p1(
     key: str = Query(..., description="R2 object key, e.g. raw/TEST-001/original.png"),
     brand: str = Query("Daiwa"),
-    model: str = Query("RS"),
+    model: str = Query("RENDER"),
     chip1: str = Query("3BB"),
     chip2: str = Query("5.1:1"),
     chip3: str = Query("RS1000-6000"),
