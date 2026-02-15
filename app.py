@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-14T"
+VERSION = "P1 v2026-02-15V"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -114,7 +114,7 @@ def r2_get_object_bytes(key: str) -> bytes:
 # ---------- Fonts ----------
 def load_font_regular(size: int) -> ImageFont.FreeTypeFont:
     for path in [
-        os.path.join(os.path.dirname(__file__), "assets", "fonts", "Inter-Medium.ttf"),
+        os.path.join(os.path.dirname(__file__), "assets", "fonts", "Inter_18pt-Medium.ttf"),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]:
         try:
@@ -126,7 +126,7 @@ def load_font_regular(size: int) -> ImageFont.FreeTypeFont:
 
 def load_font_bold(size: int) -> ImageFont.FreeTypeFont:
     for path in [
-        os.path.join(os.path.dirname(__file__), "assets", "fonts", "ArchivoNarrow-Black.ttf"),
+        os.path.join(os.path.dirname(__file__), "assets", "fonts", "ArchivoNarrow-Bold.ttf"),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ]:
         try:
@@ -142,9 +142,18 @@ def fit_text(draw, text, max_w, start_size, min_size=16, loader=load_font_regula
         font = loader(size)
         w, _ = text_size(draw, text, font)
         if w <= max_w:
-            return font
+            return font, text
         size -= 2
-    return loader(min_size)
+    # At min size, still too wide — truncate with ellipsis
+    font = loader(min_size)
+    truncated = text
+    while len(truncated) > 1:
+        truncated = truncated[:-1].rstrip()
+        candidate = truncated + "…"
+        w, _ = text_size(draw, candidate, font)
+        if w <= max_w:
+            return font, candidate
+    return loader(min_size), text
 
 
 # ---------- Drawing helpers ----------
@@ -326,7 +335,7 @@ def load_bg(theme: str):
 def render_p1(
     key: str = Query(..., description="R2 object key, e.g. raw/TEST-001/original.png"),
     brand: str = Query("Daiwa"),
-    model: str = Query("RENDER"),
+    model: str = Query("RS"),
     chip1: str = Query("3BB"),
     chip2: str = Query("5.1:1"),
     chip3: str = Query("RS1000-6000"),
@@ -361,18 +370,18 @@ def render_p1(
 
     header_left = pad
     header_top = top_pad
-    header_max_w = int(W * 0.55) - header_left
+    header_max_w = int(W * 0.65) - header_left
 
     # 4) BRAND text
     brand_text = (brand or "").strip().upper()
-    brand_font = fit_text(draw, brand_text, max_w=header_max_w,
+    brand_font, brand_text = fit_text(draw, brand_text, max_w=header_max_w,
                           start_size=56, min_size=34, loader=load_font_regular)
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
     # 5) MODEL text
     model_text = (model or "").strip().upper()
-    model_font = fit_text(draw, model_text, max_w=header_max_w,
-                          start_size=200, min_size=100, loader=load_font_bold)
+    model_font, model_text = fit_text(draw, model_text, max_w=header_max_w,
+                          start_size=200, min_size=72, loader=load_font_bold)
     model_y = header_top + brand_h - 6
 
     # 6) Pre-compute chip & CTA sizes
