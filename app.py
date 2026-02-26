@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2 v2026-02-26b"
+VERSION = "P1+P2 v2026-02-26c"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -298,39 +298,39 @@ def load_bg(theme: str):
     return Image.open(path).convert("RGBA")
 
 
-@app.get("/render/p1")
-def render_p1(
-    key: str = Query(..., description="R2 object key, e.g. raw/TEST-001/original.png"),
-    brand: str = Query("Daiwa"),
-    model: str = Query("RS"),
-    chip1: str = Query("3BB"),
-    chip2: str = Query("5.1:1"),
-    chip3: str = Query("RS1000-6000"),
-    theme: str = Query("yellow"),
-):
-    data = r2_get_object_bytes(key)
-    try:
-        hero = Image.open(BytesIO(data)).convert("RGBA")
-        hero = trim_transparent(hero, pad=6)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
+# =====================================================================
+# Shared rendering engine — used by both /render/p1 and /render/p2
+# P1 and P2 use identical layout; only the source image key differs.
+# Layout: text top-left, size badge top-right, hero right-centre,
+#         chips + CTA bottom-centre — all on the theme background.
+# =====================================================================
 
+def _render_product(
+    hero: Image.Image,
+    theme: str,
+    brand: str,
+    model: str,
+    chip1: str,
+    chip2: str,
+    chip3: str,
+) -> bytes:
+    """Compose a 1000×1000 product card and return raw PNG bytes."""
     W, H = 1000, 1000
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw = ImageDraw.Draw(canvas)
 
     tc = get_theme_colors(theme)
-    text_color = tc["text"]
+    text_color      = tc["text"]
     chip_text_color = tc["chip_text"]
-    divider_color = tc["divider"]
+    divider_color   = tc["divider"]
 
-    pad = 56
-    top_pad = 44
-    BOTTOM_SAFE = 28
+    pad          = 56
+    top_pad      = 44
+    BOTTOM_SAFE  = 28
     CHIP_TOP_GAP = 16
-    CTA_GAP_Y = 20
-    header_left = pad
-    header_top = top_pad
+    CTA_GAP_Y    = 20
+    header_left  = pad
+    header_top   = top_pad
     header_max_w = int(W * 0.65) - header_left
 
     brand_text = (brand or "").strip().upper()
@@ -346,38 +346,38 @@ def render_p1(
     features = [(chip1 or "").strip(), (chip2 or "").strip()]
     features = [c for c in features if c]
 
-    chip_font = load_font_bold(36)
-    cta_text = "READY STOCK \u2022 FAST SHIP"
-    cta_font = load_font_bold(18)
-    cta_pad_x = 14
-    cta_pad_y = 6
+    chip_font  = load_font_bold(36)
+    cta_text   = "READY STOCK \u2022 FAST SHIP"
+    cta_font   = load_font_bold(18)
+    cta_pad_x  = 14
+    cta_pad_y  = 6
     cta_tw, cta_th = text_size(draw, cta_text, cta_font)
     cta_w = cta_tw + cta_pad_x * 2
     cta_h = cta_th + cta_pad_y * 2
 
     chip_groups = []
     for i, c in enumerate(features):
-        tw, th = text_size(draw, c, chip_font)
-        icon_file = CHIP_ICONS.get(i)
-        icon = load_icon(icon_file, ICON_SIZE) if icon_file else None
-        icon_w = ICON_SIZE if icon else 0
-        group_w = (icon_w + ICON_TEXT_GAP + tw) if icon else tw
-        group_h = max(ICON_SIZE, th)
+        tw, th     = text_size(draw, c, chip_font)
+        icon_file  = CHIP_ICONS.get(i)
+        icon       = load_icon(icon_file, ICON_SIZE) if icon_file else None
+        icon_w     = ICON_SIZE if icon else 0
+        group_w    = (icon_w + ICON_TEXT_GAP + tw) if icon else tw
+        group_h    = max(ICON_SIZE, th)
         chip_groups.append((c, tw, th, group_w, group_h, icon, icon_w))
 
-    chip_row_h = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
-    num_dividers = max(0, len(chip_groups) - 1)
-    total_chips_w = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
+    chip_row_h     = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
+    num_dividers   = max(0, len(chip_groups) - 1)
+    total_chips_w  = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
     total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
-    needed_below = CHIP_TOP_GAP + chip_row_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
+    needed_below   = CHIP_TOP_GAP + chip_row_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
 
     hero_w, hero_h = hero.size
     TARGET_H_RATIO = 0.62
-    target_h = int(H * TARGET_H_RATIO)
-    scale = target_h / hero_h
-    new_w = max(1, int(hero_w * scale))
-    new_h = max(1, int(hero_h * scale))
-    hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
+    target_h       = int(H * TARGET_H_RATIO)
+    scale          = target_h / hero_h
+    new_w          = max(1, int(hero_w * scale))
+    new_h          = max(1, int(hero_h * scale))
+    hero_rs        = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
     px = (W - new_w) // 2 + 100
     px = max(px, pad)
@@ -390,18 +390,18 @@ def render_p1(
     hero_bottom = py + new_h
 
     draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, text_color)
-    draw_text_align_left(draw, header_left, model_y, model_text, model_font, text_color)
+    draw_text_align_left(draw, header_left, model_y,    model_text, model_font, text_color)
 
     size_text = (chip3 or "").strip()
     if size_text:
         badge_font = load_font_bold(38)
-        bpx, bpy = 22, 12
-        tw, th = text_size(draw, size_text, badge_font)
-        bw, bh = tw + bpx * 2, th + bpy * 2
-        bx1 = W - pad
-        by0 = top_pad + 12
-        bx0 = bx1 - bw
-        by1 = by0 + bh
+        bpx, bpy   = 22, 12
+        tw, th     = text_size(draw, size_text, badge_font)
+        bw, bh     = tw + bpx * 2, th + bpy * 2
+        bx1        = W - pad
+        by0        = top_pad + 12
+        bx0        = bx1 - bw
+        by1        = by0 + bh
         draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
     glow_cx = px + new_w // 2
@@ -412,10 +412,10 @@ def render_p1(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    chip_y_top = hero_bottom + CHIP_TOP_GAP
+    chip_y_top    = hero_bottom + CHIP_TOP_GAP
     chip_y_center = chip_y_top + chip_row_h // 2
-    chip_start_x = (W - total_chips_w) // 2
-    cur_x = chip_start_x
+    chip_start_x  = (W - total_chips_w) // 2
+    cur_x         = chip_start_x
     for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
         if icon:
             icon_y = chip_y_center - ICON_SIZE // 2
@@ -424,16 +424,17 @@ def render_p1(
             text_x = cur_x + icon_w + ICON_TEXT_GAP
         else:
             text_x = cur_x
-        bbox = draw.textbbox((0, 0), c, font=chip_font)
+        bbox   = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
         text_y = chip_y_center - text_h // 2 - bbox[1]
         draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
         cur_x += gw
         if idx < len(chip_groups) - 1:
-            div_x = cur_x + CHIP_GAP_X // 2
+            div_x     = cur_x + CHIP_GAP_X // 2
             div_y_top = chip_y_center - int(chip_row_h * 0.35)
             div_y_bot = chip_y_center + int(chip_row_h * 0.35)
-            draw.line([(div_x, div_y_top), (div_x, div_y_bot)], fill=divider_color, width=DIVIDER_WIDTH)
+            draw.line([(div_x, div_y_top), (div_x, div_y_bot)],
+                      fill=divider_color, width=DIVIDER_WIDTH)
             cur_x += CHIP_GAP_X + DIVIDER_WIDTH
 
     chips_bottom = chip_y_top + chip_row_h
@@ -446,61 +447,22 @@ def render_p1(
 
     out = BytesIO()
     canvas.convert("RGBA").save(out, format="PNG")
-    return Response(content=out.getvalue(), media_type="image/png")
+    return out.getvalue()
 
 
-# =====================================================================
-# P2 v1.1 — Locked retail layout
-# Hero LEFT (60% width, visually centred on left half)
-# Info panel RIGHT (semi-transparent container, locked hierarchy)
-# =====================================================================
-
-# ── P2 layout constants ───────────────────────────────────────────────────────
-P2_W, P2_H          = 1000, 1000
-
-# Hero zone (left side)
-P2_HERO_L_MARGIN    = 28          # gap from left canvas edge
-P2_HERO_R_EDGE      = 565         # right boundary of hero zone
-P2_HERO_MAX_W       = P2_HERO_R_EDGE - P2_HERO_L_MARGIN   # 537 px ≈ 54% canvas
-P2_HERO_MAX_H       = P2_H - 60  # vertical breathing room
-
-# Right info panel
-P2_PANEL_X0         = 548
-P2_PANEL_X1         = 968
-P2_PANEL_Y0         = 52
-P2_PANEL_Y1         = P2_H - 52
-P2_PANEL_PAD        = 36
-P2_PANEL_RADIUS     = 28
-P2_PANEL_FILL_LIGHT = (255, 255, 255, 44)   # ~17% white — for dark themes
-P2_PANEL_FILL_DARK  = (20,  20,  20,  52)   # ~20% dark  — for light themes
-
-# Content area inside panel
-P2_INFO_X           = P2_PANEL_X0 + P2_PANEL_PAD   # 584
-P2_INFO_MAX_X       = P2_PANEL_X1 - P2_PANEL_PAD   # 932
-P2_INFO_W           = P2_INFO_MAX_X - P2_INFO_X     # 348
-P2_INFO_Y           = P2_PANEL_Y0 + P2_PANEL_PAD   # 88
-
-# Chip row
-P2_CHIP_ICON_SZ     = 58
-P2_CHIP_FONT_SZ     = 34
-P2_CHIP_ROW_GAP     = 16
-
-# Text colours inside panel (forced — readable on semi-transparent surface)
-# Light themes → panel is dark → use white text
-# Dark themes  → panel is light → use dark text
-P2_LIGHT_THEME_TEXT = (255, 255, 255, 255)   # white on dark panel fill
-P2_DARK_THEME_TEXT  = (22,  22,  22,  255)   # near-black on light panel fill
-P2_CHIP_SHADOW      = (0,   0,   0,   170)   # drop-shadow for chip labels
+def _load_hero(key: str) -> Image.Image:
+    """Load hero from R2, trim transparency."""
+    data = r2_get_object_bytes(key)
+    try:
+        hero = Image.open(BytesIO(data)).convert("RGBA")
+        return trim_transparent(hero, pad=6)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
 
 
-def _p2_is_dark_bg(theme: str) -> bool:
-    """True for backgrounds that need a light panel (navy, teal)."""
-    return (theme or "").lower() in ("navy", "teal")
-
-
-@app.get("/render/p2")
-def render_p2(
-    key: str = Query(..., description="R2 object key, e.g. raw/TEST-001/A/P2_ANGLE_CUTOUT.png"),
+@app.get("/render/p1")
+def render_p1(
+    key:   str = Query(...),
     brand: str = Query("Daiwa"),
     model: str = Query("RS"),
     chip1: str = Query("3BB"),
@@ -508,144 +470,20 @@ def render_p2(
     chip3: str = Query("RS1000-6000"),
     theme: str = Query("yellow"),
 ):
-    """
-    P2 v1.1 — locked retail layout.
-    Hero LEFT (scaled to ~54–60% canvas width, vertically centred).
-    Semi-transparent info panel RIGHT with locked text hierarchy.
-    """
-    # ── Load hero ─────────────────────────────────────────────────────────────
-    data = r2_get_object_bytes(key)
-    try:
-        hero = Image.open(BytesIO(data)).convert("RGBA")
-        hero = trim_transparent(hero, pad=6)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
+    png = _render_product(_load_hero(key), theme, brand, model, chip1, chip2, chip3)
+    return Response(content=png, media_type="image/png")
 
-    # ── Canvas ────────────────────────────────────────────────────────────────
-    W, H = P2_W, P2_H
-    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
-    draw = ImageDraw.Draw(canvas)
 
-    dark_bg       = _p2_is_dark_bg(theme)
-    panel_fill    = P2_PANEL_FILL_LIGHT if dark_bg else P2_PANEL_FILL_DARK
-    panel_text    = P2_LIGHT_THEME_TEXT  if dark_bg else P2_DARK_THEME_TEXT
-    tc            = get_theme_colors(theme)
-    divider_color = tc["divider"]
-
-    # ── Scale hero to fill left zone ──────────────────────────────────────────
-    hw, hh  = hero.size
-    scale   = min(P2_HERO_MAX_W / hw, P2_HERO_MAX_H / hh)
-    new_w   = max(1, int(hw * scale))
-    new_h   = max(1, int(hh * scale))
-    hero_rs = hero.resize((new_w, new_h), Image.LANCZOS)
-
-    # Centre hero horizontally in the hero zone, vertically on canvas
-    px = P2_HERO_L_MARGIN + (P2_HERO_R_EDGE - P2_HERO_L_MARGIN - new_w) // 2
-    px = max(P2_HERO_L_MARGIN, px)
-    py = (H - new_h) // 2
-
-    # ── Soft radial glow behind hero (reduced strength vs P1) ─────────────────
-    draw_radial_glow(
-        canvas,
-        px + new_w // 2, py + new_h // 2,
-        glow_w=340, glow_h=300, max_alpha=38, y_offset=30,
-    )
-    draw = ImageDraw.Draw(canvas)
-
-    # ── Draw info panel (semi-transparent rounded rect) ───────────────────────
-    panel_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    pdraw = ImageDraw.Draw(panel_layer)
-    pdraw.rounded_rectangle(
-        (P2_PANEL_X0, P2_PANEL_Y0, P2_PANEL_X1, P2_PANEL_Y1),
-        radius=P2_PANEL_RADIUS,
-        fill=panel_fill,
-    )
-    canvas.alpha_composite(panel_layer)
-    draw = ImageDraw.Draw(canvas)
-
-    # ── Composite hero ON TOP of glow + panel ─────────────────────────────────
-    canvas.alpha_composite(hero_rs, (px, py))
-    draw = ImageDraw.Draw(canvas)
-
-    # ── Info panel content ────────────────────────────────────────────────────
-    cur_y  = P2_INFO_Y
-    IX     = P2_INFO_X
-    IW     = P2_INFO_W
-    IX_MAX = P2_INFO_MAX_X
-
-    # Brand (small, regular weight)
-    brand_text = (brand or "").strip().upper()
-    brand_font, brand_text = fit_text(
-        draw, brand_text, max_w=IW, start_size=38, min_size=24, loader=load_font_regular
-    )
-    draw_text_align_left(draw, IX, cur_y, brand_text, brand_font, panel_text)
-    cur_y += text_size(draw, brand_text, brand_font)[1] + 10
-
-    # Divider under brand
-    draw.line([(IX, cur_y), (IX_MAX, cur_y)], fill=divider_color, width=2)
-    cur_y += 14
-
-    # Model (large, bold)
-    model_text = (model or "").strip().upper()
-    model_font, model_text = fit_text(
-        draw, model_text, max_w=IW, start_size=118, min_size=52, loader=load_font_bold
-    )
-    draw_text_align_left(draw, IX, cur_y, model_text, model_font, panel_text)
-    cur_y += text_size(draw, model_text, model_font)[1] + 20
-
-    # Size badge — chip3 (yellow sticker pill)
-    size_text = (chip3 or "").strip()
-    if size_text:
-        badge_font = load_font_bold(30)
-        bpx, bpy = 16, 9
-        tw, th = text_size(draw, size_text, badge_font)
-        bw = tw + bpx * 2
-        bh = th + bpy * 2
-        draw_sticker_pill(draw, IX, cur_y, IX + bw, cur_y + bh, size_text, badge_font)
-        cur_y += bh + 22
-
-    # Thin divider before chips
-    draw.line([(IX, cur_y), (IX_MAX, cur_y)], fill=divider_color, width=1)
-    cur_y += 18
-
-    # Chip rows — icon + label, baseline-aligned, shadow for readability
-    chip_font = load_font_bold(P2_CHIP_FONT_SZ)
-    features  = [(chip1 or "").strip(), (chip2 or "").strip()]
-    features  = [c for c in features if c]
-
-    for i, c in enumerate(features):
-        icon_file = CHIP_ICONS.get(i)
-        icon      = load_icon(icon_file, P2_CHIP_ICON_SZ) if icon_file else None
-        tw, th    = text_size(draw, c, chip_font)
-        row_h     = max(P2_CHIP_ICON_SZ, th)
-
-        if icon:
-            iy = cur_y + (row_h - P2_CHIP_ICON_SZ) // 2
-            canvas.alpha_composite(icon, (IX, iy))
-            draw = ImageDraw.Draw(canvas)
-            tx = IX + P2_CHIP_ICON_SZ + 12
-        else:
-            tx = IX
-
-        # Baseline-align text to icon centre
-        ty = cur_y + (row_h - th) // 2
-        # Drop shadow for chip label readability
-        draw_text_with_shadow(draw, tx, ty, c, chip_font,
-                              fill=panel_text, shadow_color=P2_CHIP_SHADOW, shadow_offset=2)
-
-        cur_y += row_h + P2_CHIP_ROW_GAP
-
-    # CTA pill — pinned to bottom inside panel
-    cta_text  = "READY STOCK \u2022 FAST SHIP"
-    cta_font  = load_font_bold(18)
-    cpx, cpy  = 14, 6
-    cta_tw, cta_th = text_size(draw, cta_text, cta_font)
-    cta_w     = cta_tw + cpx * 2
-    cta_h     = cta_th + cpy * 2
-    cta_y0    = P2_PANEL_Y1 - P2_PANEL_PAD - cta_h
-    draw_sticker_pill(draw, IX, cta_y0, IX + cta_w, cta_y0 + cta_h, cta_text, cta_font)
-
-    # ── Output PNG ────────────────────────────────────────────────────────────
-    out = BytesIO()
-    canvas.convert("RGBA").save(out, format="PNG")
-    return Response(content=out.getvalue(), media_type="image/png")
+@app.get("/render/p2")
+def render_p2(
+    key:   str = Query(...),
+    brand: str = Query("Daiwa"),
+    model: str = Query("RS"),
+    chip1: str = Query("3BB"),
+    chip2: str = Query("5.1:1"),
+    chip3: str = Query("RS1000-6000"),
+    theme: str = Query("yellow"),
+):
+    """P2 — same layout as P1, different source photo slot (angle cutout)."""
+    png = _render_product(_load_hero(key), theme, brand, model, chip1, chip2, chip3)
+    return Response(content=png, media_type="image/png")
