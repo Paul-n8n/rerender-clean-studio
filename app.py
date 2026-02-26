@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1 v2026-02-15V"
+VERSION = "P1+P2 v2026-02-26"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -529,6 +529,150 @@ def render_p1(
     draw_sticker_pill(draw, cta_x0, cta_y0, cta_x1, cta_y1, cta_text, cta_font)
 
     # 10) Output PNG
+    out = BytesIO()
+    canvas.convert("RGBA").save(out, format="PNG")
+    return Response(content=out.getvalue(), media_type="image/png")
+
+
+@app.get("/render/p2")
+def render_p2(
+    key: str = Query(..., description="R2 object key, e.g. raw/TEST-001/A/P2_ANGLE_CUTOUT.png"),
+    brand: str = Query("Daiwa"),
+    model: str = Query("RS"),
+    chip1: str = Query("3BB"),
+    chip2: str = Query("5.1:1"),
+    chip3: str = Query("RS1000-6000"),
+    theme: str = Query("yellow"),
+):
+    """
+    P2 angle layout — product LEFT, info panel RIGHT.
+
+    Canvas 1000x1000:
+      Left  zone  x=0..520   — hero image, vertically centred
+      Right zone  x=540..960 — brand / model / size badge / chips / CTA
+    """
+    # 1) Load angle-shot cutout from R2
+    data = r2_get_object_bytes(key)
+    try:
+        hero = Image.open(BytesIO(data)).convert("RGBA")
+        hero = trim_transparent(hero, pad=6)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
+
+    # 2) Canvas
+    W, H = 1000, 1000
+    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+    draw = ImageDraw.Draw(canvas)
+
+    tc = get_theme_colors(theme)
+    text_color      = tc["text"]
+    chip_text_color = tc["chip_text"]
+
+    # 3) Zone boundaries
+    PRODUCT_MAX_X = 520   # right edge of hero zone
+    INFO_X        = 540   # left edge of info panel
+    INFO_MAX_X    = 960   # right edge of info panel
+    INFO_W        = INFO_MAX_X - INFO_X
+    PAD_Y_TOP     = 60
+    PAD_Y_BOT     = 40
+    BOTTOM_SAFE   = PAD_Y_BOT + 60   # space reserved for CTA
+
+    # 4) Scale hero to fill left zone (max 500w x 860h)
+    MAX_HERO_W = PRODUCT_MAX_X - 20
+    MAX_HERO_H = H - 80
+    hw, hh = hero.size
+    scale  = min(MAX_HERO_W / hw, MAX_HERO_H / hh)
+    new_w  = max(1, int(hw * scale))
+    new_h  = max(1, int(hh * scale))
+    hero_rs = hero.resize((new_w, new_h), Image.LANCZOS)
+
+    # Centre hero in left zone
+    px = (PRODUCT_MAX_X - new_w) // 2
+    py = (H - new_h) // 2
+
+    # 5) Glow behind hero
+    draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2,
+                     glow_w=420, glow_h=380)
+    draw = ImageDraw.Draw(canvas)
+
+    # 6) Composite hero
+    canvas.alpha_composite(hero_rs, (px, py))
+    draw = ImageDraw.Draw(canvas)
+
+    # ── INFO PANEL ───────────────────────────────────────────────────────────
+    cur_y = PAD_Y_TOP
+
+    # Brand
+    brand_text = (brand or "").strip().upper()
+    brand_font, brand_text = fit_text(draw, brand_text, max_w=INFO_W,
+                                      start_size=42, min_size=26,
+                                      loader=load_font_regular)
+    draw_text_align_left(draw, INFO_X, cur_y, brand_text, brand_font, text_color)
+    cur_y += text_size(draw, brand_text, brand_font)[1] + 6
+
+    # Divider line under brand
+    draw.line([(INFO_X, cur_y), (INFO_MAX_X, cur_y)],
+              fill=tc["divider"], width=2)
+    cur_y += 14
+
+    # Model
+    model_text = (model or "").strip().upper()
+    model_font, model_text = fit_text(draw, model_text, max_w=INFO_W,
+                                      start_size=130, min_size=56,
+                                      loader=load_font_bold)
+    draw_text_align_left(draw, INFO_X, cur_y, model_text, model_font, text_color)
+    cur_y += text_size(draw, model_text, model_font)[1] + 20
+
+    # Size badge (chip3)
+    size_text = (chip3 or "").strip()
+    if size_text:
+        badge_font = load_font_bold(32)
+        bpx, bpy = 18, 10
+        tw, th = text_size(draw, size_text, badge_font)
+        bw = tw + bpx * 2
+        bh = th + bpy * 2
+        draw_sticker_pill(draw, INFO_X, cur_y,
+                          INFO_X + bw, cur_y + bh,
+                          size_text, badge_font)
+        cur_y += bh + 28
+
+    # Chips — icon + label, one per row
+    chip_font  = load_font_bold(34)
+    chip_icon_sz = 64
+    features = [(chip1 or "").strip(), (chip2 or "").strip()]
+    features = [c for c in features if c]
+
+    for i, c in enumerate(features):
+        icon_file = CHIP_ICONS.get(i)
+        icon      = load_icon(icon_file, chip_icon_sz) if icon_file else None
+        tw, th    = text_size(draw, c, chip_font)
+        row_h     = max(chip_icon_sz, th)
+
+        if icon:
+            iy = cur_y + (row_h - chip_icon_sz) // 2
+            canvas.alpha_composite(icon, (INFO_X, iy))
+            draw = ImageDraw.Draw(canvas)
+            tx = INFO_X + chip_icon_sz + 10
+        else:
+            tx = INFO_X
+
+        ty = cur_y + (row_h - th) // 2
+        draw.text((tx, ty), c, font=chip_font, fill=chip_text_color)
+        cur_y += row_h + 14
+
+    # CTA — pinned to bottom of info panel
+    cta_text  = "READY STOCK \u2022 FAST SHIP"
+    cta_font  = load_font_bold(18)
+    cta_pad_x, cta_pad_y = 14, 6
+    cta_tw, cta_th = text_size(draw, cta_text, cta_font)
+    cta_w = cta_tw + cta_pad_x * 2
+    cta_h = cta_th + cta_pad_y * 2
+    cta_y0 = H - PAD_Y_BOT - cta_h
+    draw_sticker_pill(draw, INFO_X, cta_y0,
+                      INFO_X + cta_w, cta_y0 + cta_h,
+                      cta_text, cta_font)
+
+    # 7) Output PNG
     out = BytesIO()
     canvas.convert("RGBA").save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
