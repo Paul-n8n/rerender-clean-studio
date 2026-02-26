@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2 v2026-02-26"
+VERSION = "P1+P2 v2026-02-26b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -26,7 +26,6 @@ STICKER_OUTLINE = (20, 20, 20, 255)
 STICKER_TEXT = (20, 20, 20, 255)
 
 # ======================== THEME COLOR MAPPING ============================
-# Each theme defines: text color, chip color, divider color, sticker outline
 THEME_COLORS = {
     "yellow": {
         "text": (20, 20, 20, 255),
@@ -59,6 +58,8 @@ DEFAULT_THEME_COLORS = THEME_COLORS["yellow"]
 
 def get_theme_colors(theme: str) -> dict:
     return THEME_COLORS.get((theme or "yellow").lower(), DEFAULT_THEME_COLORS)
+
+
 ICON_SIZE = 80
 ICON_TEXT_GAP = 8
 CHIP_GAP_X = 50
@@ -67,14 +68,13 @@ DIVIDER_COLOR = (80, 80, 80, 180)
 CHIP_TEXT_COLOR = (30, 30, 30, 255)
 
 # ======================== GLOW SETTINGS ===============================
-GLOW_W = 500               # horizontal spread
-GLOW_H = 250               # vertical spread — stays below header
+GLOW_W = 500
+GLOW_H = 250
 GLOW_COLOR = (255, 255, 255)
-GLOW_ALPHA = 60            # subtle breath of light
-GLOW_Y_OFFSET = 50         # push center down from header
-GLOW_NOISE = 3             # noise amplitude to break banding
+GLOW_ALPHA = 60
+GLOW_Y_OFFSET = 50
+GLOW_NOISE = 3
 
-# =====================================================================
 
 # ---------- R2 client ----------
 def r2_client():
@@ -144,7 +144,6 @@ def fit_text(draw, text, max_w, start_size, min_size=16, loader=load_font_regula
         if w <= max_w:
             return font, text
         size -= 2
-    # At min size, still too wide — truncate with ellipsis
     font = loader(min_size)
     truncated = text
     while len(truncated) > 1:
@@ -185,77 +184,54 @@ def draw_text_centered_in_box(draw, box_x0, box_y0, box_w, box_h, text, font, fi
 
 
 def draw_sticker_pill(draw, x0, y0, x1, y1, text, font):
-    """Draw a standardized yellow sticker pill with centered text."""
-    draw_rounded_rect(draw, (x0, y0, x1, y1),
-                      radius=STICKER_RADIUS, fill=STICKER_FILL)
-    draw.rounded_rectangle((x0, y0, x1, y1),
-                           radius=STICKER_RADIUS,
-                           outline=STICKER_OUTLINE,
-                           width=STICKER_BORDER_W)
-    draw_text_centered_in_box(draw, x0, y0, x1 - x0, y1 - y0,
-                              text, font, STICKER_TEXT)
+    draw_rounded_rect(draw, (x0, y0, x1, y1), radius=STICKER_RADIUS, fill=STICKER_FILL)
+    draw.rounded_rectangle((x0, y0, x1, y1), radius=STICKER_RADIUS,
+                            outline=STICKER_OUTLINE, width=STICKER_BORDER_W)
+    draw_text_centered_in_box(draw, x0, y0, x1 - x0, y1 - y0, text, font, STICKER_TEXT)
+
+
+def draw_text_with_shadow(draw, x, y, text, font, fill, shadow_color=(0, 0, 0, 160), shadow_offset=2):
+    """Draw text with a soft drop shadow for readability on any background."""
+    for dx, dy in [(-1, shadow_offset), (1, shadow_offset), (0, shadow_offset), (0, 1)]:
+        draw.text((x + dx, y + dy), text, font=font, fill=shadow_color)
+    draw.text((x, y), text, font=font, fill=fill)
 
 
 def draw_radial_glow(canvas: Image.Image, center_x: int, center_y: int,
-                     glow_w: int = GLOW_W,
-                     glow_h: int = GLOW_H,
-                     color: tuple = GLOW_COLOR,
-                     max_alpha: int = GLOW_ALPHA,
-                     y_offset: int = GLOW_Y_OFFSET,
-                     noise_amp: int = GLOW_NOISE):
-    """
-    Draw a smooth elliptical glow using multiple concentric ellipses
-    with decreasing alpha + heavy blur to avoid banding.
-    Pure Pillow, no numpy needed.
-    """
+                     glow_w: int = GLOW_W, glow_h: int = GLOW_H,
+                     color: tuple = GLOW_COLOR, max_alpha: int = GLOW_ALPHA,
+                     y_offset: int = GLOW_Y_OFFSET, noise_amp: int = GLOW_NOISE):
     import random
-
     cy = center_y + y_offset
     w, h = canvas.size
-
     glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow)
-
-    # Draw many concentric ellipses from outside in, increasing alpha
     steps = 30
     for i in range(steps):
-        t = i / steps  # 0 = outermost, 1 = center
-        # Shrink ellipse as we go inward
+        t = i / steps
         ew = int(glow_w * (1.0 - t * 0.8))
         eh = int(glow_h * (1.0 - t * 0.8))
-
-        # Alpha increases toward center (quadratic)
         a = int(max_alpha * t * t)
-        # Add tiny noise to break banding
         if noise_amp > 0:
             a = max(0, min(255, a + random.randint(-noise_amp, noise_amp)))
-
         if a <= 0:
             continue
-
         x0 = center_x - ew
         y0 = cy - eh
         x1 = center_x + ew
         y1 = cy + eh
-
-        glow_draw.ellipse((x0, y0, x1, y1),
-                          fill=(color[0], color[1], color[2], a))
-
-    # Heavy blur to smooth the concentric rings into a gradient
+        glow_draw.ellipse((x0, y0, x1, y1), fill=(color[0], color[1], color[2], a))
     glow = glow.filter(ImageFilter.GaussianBlur(radius=50))
-
     canvas.alpha_composite(glow)
 
 
 def trim_transparent(im: Image.Image, pad: int = 0) -> Image.Image:
     if im.mode != "RGBA":
         im = im.convert("RGBA")
-
     alpha = im.split()[-1]
     bbox = alpha.getbbox()
     if not bbox:
         return im
-
     x0, y0, x1, y1 = bbox
     x0 = max(0, x0 - pad)
     y0 = max(0, y0 - pad)
@@ -271,27 +247,19 @@ ICONS_DIR = os.path.join(ASSETS_DIR, "icons")
 
 
 def load_icon(filename: str, box_size: int) -> Optional[Image.Image]:
-    """
-    Load a PNG icon and scale to fit within a box_size x box_size square.
-    Maintains aspect ratio. Result is always box_size x box_size with
-    the icon centered and transparent padding around it.
-    """
     path = os.path.join(ICONS_DIR, filename)
     if not os.path.exists(path):
         return None
     try:
         icon = Image.open(path).convert("RGBA")
-
         scale = min(box_size / icon.width, box_size / icon.height)
         new_w = max(1, int(icon.width * scale))
         new_h = max(1, int(icon.height * scale))
         icon = icon.resize((new_w, new_h), Image.LANCZOS)
-
         result = Image.new("RGBA", (box_size, box_size), (0, 0, 0, 0))
         offset_x = (box_size - new_w) // 2
         offset_y = (box_size - new_h) // 2
         result.alpha_composite(icon, (offset_x, offset_y))
-
         return result
     except Exception:
         return None
@@ -317,7 +285,6 @@ def get_image(key: str):
         hero = trim_transparent(hero, pad=0)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
-
     out = BytesIO()
     hero.save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
@@ -341,7 +308,6 @@ def render_p1(
     chip3: str = Query("RS1000-6000"),
     theme: str = Query("yellow"),
 ):
-    # 1) Load hero image from R2
     data = r2_get_object_bytes(key)
     try:
         hero = Image.open(BytesIO(data)).convert("RGBA")
@@ -349,87 +315,66 @@ def render_p1(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
 
-    # 2) Create canvas
     W, H = 1000, 1000
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw = ImageDraw.Draw(canvas)
 
-    # Resolve theme-aware colors
     tc = get_theme_colors(theme)
     text_color = tc["text"]
     chip_text_color = tc["chip_text"]
     divider_color = tc["divider"]
 
-    # 3) Layout constants
     pad = 56
     top_pad = 44
     BOTTOM_SAFE = 28
-
     CHIP_TOP_GAP = 16
     CTA_GAP_Y = 20
-
     header_left = pad
     header_top = top_pad
     header_max_w = int(W * 0.65) - header_left
 
-    # 4) BRAND text
     brand_text = (brand or "").strip().upper()
     brand_font, brand_text = fit_text(draw, brand_text, max_w=header_max_w,
-                          start_size=56, min_size=34, loader=load_font_regular)
+                                      start_size=56, min_size=34, loader=load_font_regular)
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
-    # 5) MODEL text
     model_text = (model or "").strip().upper()
     model_font, model_text = fit_text(draw, model_text, max_w=header_max_w,
-                          start_size=200, min_size=72, loader=load_font_bold)
+                                      start_size=200, min_size=72, loader=load_font_bold)
     model_y = header_top + brand_h - 6
 
-    # 6) Pre-compute chip & CTA sizes
     features = [(chip1 or "").strip(), (chip2 or "").strip()]
     features = [c for c in features if c]
 
     chip_font = load_font_bold(36)
-
     cta_text = "READY STOCK \u2022 FAST SHIP"
     cta_font = load_font_bold(18)
     cta_pad_x = 14
     cta_pad_y = 6
-
     cta_tw, cta_th = text_size(draw, cta_text, cta_font)
     cta_w = cta_tw + cta_pad_x * 2
     cta_h = cta_th + cta_pad_y * 2
 
-    # Load icons into ICON_SIZE x ICON_SIZE square boxes
     chip_groups = []
     for i, c in enumerate(features):
         tw, th = text_size(draw, c, chip_font)
         icon_file = CHIP_ICONS.get(i)
         icon = load_icon(icon_file, ICON_SIZE) if icon_file else None
         icon_w = ICON_SIZE if icon else 0
-
-        if icon:
-            group_w = icon_w + ICON_TEXT_GAP + tw
-        else:
-            group_w = tw
-
+        group_w = (icon_w + ICON_TEXT_GAP + tw) if icon else tw
         group_h = max(ICON_SIZE, th)
         chip_groups.append((c, tw, th, group_w, group_h, icon, icon_w))
 
     chip_row_h = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
-
     num_dividers = max(0, len(chip_groups) - 1)
     total_chips_w = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
     total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
-
     needed_below = CHIP_TOP_GAP + chip_row_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
 
-    # 7) HERO — ~62% height
     hero_w, hero_h = hero.size
-
     TARGET_H_RATIO = 0.62
     target_h = int(H * TARGET_H_RATIO)
     scale = target_h / hero_h
-
     new_w = max(1, int(hero_w * scale))
     new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
@@ -437,101 +382,120 @@ def render_p1(
     px = (W - new_w) // 2 + 100
     px = max(px, pad)
     px = min(px, W - new_w - 10)
-
     py = int(H * 0.22)
-
     max_hero_bottom = H - needed_below
     if py + new_h > max_hero_bottom:
         py = max_hero_bottom - new_h
         py = max(py, top_pad + 20)
-
     hero_bottom = py + new_h
 
-    # DRAW ORDER: text → glow → hero → chips → CTA
+    draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, text_color)
+    draw_text_align_left(draw, header_left, model_y, model_text, model_font, text_color)
 
-    # Draw Brand
-    draw_text_align_left(draw, header_left, header_top,
-                         brand_text, brand_font, text_color)
-
-    # Draw Model
-    draw_text_align_left(draw, header_left, model_y,
-                         model_text, model_font, text_color)
-
-    # Size badge (chip3)
     size_text = (chip3 or "").strip()
     if size_text:
         badge_font = load_font_bold(38)
         bpx, bpy = 22, 12
-
         tw, th = text_size(draw, size_text, badge_font)
         bw, bh = tw + bpx * 2, th + bpy * 2
-
         bx1 = W - pad
         by0 = top_pad + 12
         bx0 = bx1 - bw
         by1 = by0 + bh
-
         draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
-    # RADIAL GLOW — behind hero, centered on hero body
     glow_cx = px + new_w // 2
     glow_cy = py + new_h // 2
     draw_radial_glow(canvas, glow_cx, glow_cy)
-    draw = ImageDraw.Draw(canvas)  # refresh after composite
+    draw = ImageDraw.Draw(canvas)
 
-    # Composite hero ON TOP of glow + text
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # 8) CHIPS — icon + text, centered row, with vertical dividers
     chip_y_top = hero_bottom + CHIP_TOP_GAP
     chip_y_center = chip_y_top + chip_row_h // 2
     chip_start_x = (W - total_chips_w) // 2
-
     cur_x = chip_start_x
     for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
         if icon:
             icon_y = chip_y_center - ICON_SIZE // 2
             canvas.alpha_composite(icon, (cur_x, icon_y))
             draw = ImageDraw.Draw(canvas)
-
             text_x = cur_x + icon_w + ICON_TEXT_GAP
         else:
             text_x = cur_x
-
         bbox = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
         text_y = chip_y_center - text_h // 2 - bbox[1]
         draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
-
         cur_x += gw
-
         if idx < len(chip_groups) - 1:
             div_x = cur_x + CHIP_GAP_X // 2
             div_y_top = chip_y_center - int(chip_row_h * 0.35)
             div_y_bot = chip_y_center + int(chip_row_h * 0.35)
-            draw.line(
-                [(div_x, div_y_top), (div_x, div_y_bot)],
-                fill=divider_color, width=DIVIDER_WIDTH
-            )
+            draw.line([(div_x, div_y_top), (div_x, div_y_bot)], fill=divider_color, width=DIVIDER_WIDTH)
             cur_x += CHIP_GAP_X + DIVIDER_WIDTH
 
     chips_bottom = chip_y_top + chip_row_h
-
-    # 9) CTA — below chips, centered
     cta_x0 = (W - cta_w) // 2
     cta_y0 = chips_bottom + CTA_GAP_Y
     cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
-
     cta_x1 = cta_x0 + cta_w
     cta_y1 = cta_y0 + cta_h
-
     draw_sticker_pill(draw, cta_x0, cta_y0, cta_x1, cta_y1, cta_text, cta_font)
 
-    # 10) Output PNG
     out = BytesIO()
     canvas.convert("RGBA").save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
+
+
+# =====================================================================
+# P2 v1.1 — Locked retail layout
+# Hero LEFT (60% width, visually centred on left half)
+# Info panel RIGHT (semi-transparent container, locked hierarchy)
+# =====================================================================
+
+# ── P2 layout constants ───────────────────────────────────────────────────────
+P2_W, P2_H          = 1000, 1000
+
+# Hero zone (left side)
+P2_HERO_L_MARGIN    = 28          # gap from left canvas edge
+P2_HERO_R_EDGE      = 565         # right boundary of hero zone
+P2_HERO_MAX_W       = P2_HERO_R_EDGE - P2_HERO_L_MARGIN   # 537 px ≈ 54% canvas
+P2_HERO_MAX_H       = P2_H - 60  # vertical breathing room
+
+# Right info panel
+P2_PANEL_X0         = 548
+P2_PANEL_X1         = 968
+P2_PANEL_Y0         = 52
+P2_PANEL_Y1         = P2_H - 52
+P2_PANEL_PAD        = 36
+P2_PANEL_RADIUS     = 28
+P2_PANEL_FILL_LIGHT = (255, 255, 255, 44)   # ~17% white — for dark themes
+P2_PANEL_FILL_DARK  = (20,  20,  20,  52)   # ~20% dark  — for light themes
+
+# Content area inside panel
+P2_INFO_X           = P2_PANEL_X0 + P2_PANEL_PAD   # 584
+P2_INFO_MAX_X       = P2_PANEL_X1 - P2_PANEL_PAD   # 932
+P2_INFO_W           = P2_INFO_MAX_X - P2_INFO_X     # 348
+P2_INFO_Y           = P2_PANEL_Y0 + P2_PANEL_PAD   # 88
+
+# Chip row
+P2_CHIP_ICON_SZ     = 58
+P2_CHIP_FONT_SZ     = 34
+P2_CHIP_ROW_GAP     = 16
+
+# Text colours inside panel (forced — readable on semi-transparent surface)
+# Light themes → panel is dark → use white text
+# Dark themes  → panel is light → use dark text
+P2_LIGHT_THEME_TEXT = (255, 255, 255, 255)   # white on dark panel fill
+P2_DARK_THEME_TEXT  = (22,  22,  22,  255)   # near-black on light panel fill
+P2_CHIP_SHADOW      = (0,   0,   0,   170)   # drop-shadow for chip labels
+
+
+def _p2_is_dark_bg(theme: str) -> bool:
+    """True for backgrounds that need a light panel (navy, teal)."""
+    return (theme or "").lower() in ("navy", "teal")
 
 
 @app.get("/render/p2")
@@ -545,13 +509,11 @@ def render_p2(
     theme: str = Query("yellow"),
 ):
     """
-    P2 angle layout — product LEFT, info panel RIGHT.
-
-    Canvas 1000x1000:
-      Left  zone  x=0..520   — hero image, vertically centred
-      Right zone  x=540..960 — brand / model / size badge / chips / CTA
+    P2 v1.1 — locked retail layout.
+    Hero LEFT (scaled to ~54–60% canvas width, vertically centred).
+    Semi-transparent info panel RIGHT with locked text hierarchy.
     """
-    # 1) Load angle-shot cutout from R2
+    # ── Load hero ─────────────────────────────────────────────────────────────
     data = r2_get_object_bytes(key)
     try:
         hero = Image.open(BytesIO(data)).convert("RGBA")
@@ -559,120 +521,131 @@ def render_p2(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Not a valid image: {e}")
 
-    # 2) Canvas
-    W, H = 1000, 1000
+    # ── Canvas ────────────────────────────────────────────────────────────────
+    W, H = P2_W, P2_H
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw = ImageDraw.Draw(canvas)
 
-    tc = get_theme_colors(theme)
-    text_color      = tc["text"]
-    chip_text_color = tc["chip_text"]
+    dark_bg       = _p2_is_dark_bg(theme)
+    panel_fill    = P2_PANEL_FILL_LIGHT if dark_bg else P2_PANEL_FILL_DARK
+    panel_text    = P2_LIGHT_THEME_TEXT  if dark_bg else P2_DARK_THEME_TEXT
+    tc            = get_theme_colors(theme)
+    divider_color = tc["divider"]
 
-    # 3) Zone boundaries
-    PRODUCT_MAX_X = 520   # right edge of hero zone
-    INFO_X        = 540   # left edge of info panel
-    INFO_MAX_X    = 960   # right edge of info panel
-    INFO_W        = INFO_MAX_X - INFO_X
-    PAD_Y_TOP     = 60
-    PAD_Y_BOT     = 40
-    BOTTOM_SAFE   = PAD_Y_BOT + 60   # space reserved for CTA
-
-    # 4) Scale hero to fill left zone (max 500w x 860h)
-    MAX_HERO_W = PRODUCT_MAX_X - 20
-    MAX_HERO_H = H - 80
-    hw, hh = hero.size
-    scale  = min(MAX_HERO_W / hw, MAX_HERO_H / hh)
-    new_w  = max(1, int(hw * scale))
-    new_h  = max(1, int(hh * scale))
+    # ── Scale hero to fill left zone ──────────────────────────────────────────
+    hw, hh  = hero.size
+    scale   = min(P2_HERO_MAX_W / hw, P2_HERO_MAX_H / hh)
+    new_w   = max(1, int(hw * scale))
+    new_h   = max(1, int(hh * scale))
     hero_rs = hero.resize((new_w, new_h), Image.LANCZOS)
 
-    # Centre hero in left zone
-    px = (PRODUCT_MAX_X - new_w) // 2
+    # Centre hero horizontally in the hero zone, vertically on canvas
+    px = P2_HERO_L_MARGIN + (P2_HERO_R_EDGE - P2_HERO_L_MARGIN - new_w) // 2
+    px = max(P2_HERO_L_MARGIN, px)
     py = (H - new_h) // 2
 
-    # 5) Glow behind hero
-    draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2,
-                     glow_w=420, glow_h=380)
+    # ── Soft radial glow behind hero (reduced strength vs P1) ─────────────────
+    draw_radial_glow(
+        canvas,
+        px + new_w // 2, py + new_h // 2,
+        glow_w=340, glow_h=300, max_alpha=38, y_offset=30,
+    )
     draw = ImageDraw.Draw(canvas)
 
-    # 6) Composite hero
+    # ── Draw info panel (semi-transparent rounded rect) ───────────────────────
+    panel_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    pdraw = ImageDraw.Draw(panel_layer)
+    pdraw.rounded_rectangle(
+        (P2_PANEL_X0, P2_PANEL_Y0, P2_PANEL_X1, P2_PANEL_Y1),
+        radius=P2_PANEL_RADIUS,
+        fill=panel_fill,
+    )
+    canvas.alpha_composite(panel_layer)
+    draw = ImageDraw.Draw(canvas)
+
+    # ── Composite hero ON TOP of glow + panel ─────────────────────────────────
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # ── INFO PANEL ───────────────────────────────────────────────────────────
-    cur_y = PAD_Y_TOP
+    # ── Info panel content ────────────────────────────────────────────────────
+    cur_y  = P2_INFO_Y
+    IX     = P2_INFO_X
+    IW     = P2_INFO_W
+    IX_MAX = P2_INFO_MAX_X
 
-    # Brand
+    # Brand (small, regular weight)
     brand_text = (brand or "").strip().upper()
-    brand_font, brand_text = fit_text(draw, brand_text, max_w=INFO_W,
-                                      start_size=42, min_size=26,
-                                      loader=load_font_regular)
-    draw_text_align_left(draw, INFO_X, cur_y, brand_text, brand_font, text_color)
-    cur_y += text_size(draw, brand_text, brand_font)[1] + 6
+    brand_font, brand_text = fit_text(
+        draw, brand_text, max_w=IW, start_size=38, min_size=24, loader=load_font_regular
+    )
+    draw_text_align_left(draw, IX, cur_y, brand_text, brand_font, panel_text)
+    cur_y += text_size(draw, brand_text, brand_font)[1] + 10
 
-    # Divider line under brand
-    draw.line([(INFO_X, cur_y), (INFO_MAX_X, cur_y)],
-              fill=tc["divider"], width=2)
+    # Divider under brand
+    draw.line([(IX, cur_y), (IX_MAX, cur_y)], fill=divider_color, width=2)
     cur_y += 14
 
-    # Model
+    # Model (large, bold)
     model_text = (model or "").strip().upper()
-    model_font, model_text = fit_text(draw, model_text, max_w=INFO_W,
-                                      start_size=130, min_size=56,
-                                      loader=load_font_bold)
-    draw_text_align_left(draw, INFO_X, cur_y, model_text, model_font, text_color)
+    model_font, model_text = fit_text(
+        draw, model_text, max_w=IW, start_size=118, min_size=52, loader=load_font_bold
+    )
+    draw_text_align_left(draw, IX, cur_y, model_text, model_font, panel_text)
     cur_y += text_size(draw, model_text, model_font)[1] + 20
 
-    # Size badge (chip3)
+    # Size badge — chip3 (yellow sticker pill)
     size_text = (chip3 or "").strip()
     if size_text:
-        badge_font = load_font_bold(32)
-        bpx, bpy = 18, 10
+        badge_font = load_font_bold(30)
+        bpx, bpy = 16, 9
         tw, th = text_size(draw, size_text, badge_font)
         bw = tw + bpx * 2
         bh = th + bpy * 2
-        draw_sticker_pill(draw, INFO_X, cur_y,
-                          INFO_X + bw, cur_y + bh,
-                          size_text, badge_font)
-        cur_y += bh + 28
+        draw_sticker_pill(draw, IX, cur_y, IX + bw, cur_y + bh, size_text, badge_font)
+        cur_y += bh + 22
 
-    # Chips — icon + label, one per row
-    chip_font  = load_font_bold(34)
-    chip_icon_sz = 64
-    features = [(chip1 or "").strip(), (chip2 or "").strip()]
-    features = [c for c in features if c]
+    # Thin divider before chips
+    draw.line([(IX, cur_y), (IX_MAX, cur_y)], fill=divider_color, width=1)
+    cur_y += 18
+
+    # Chip rows — icon + label, baseline-aligned, shadow for readability
+    chip_font = load_font_bold(P2_CHIP_FONT_SZ)
+    features  = [(chip1 or "").strip(), (chip2 or "").strip()]
+    features  = [c for c in features if c]
 
     for i, c in enumerate(features):
         icon_file = CHIP_ICONS.get(i)
-        icon      = load_icon(icon_file, chip_icon_sz) if icon_file else None
+        icon      = load_icon(icon_file, P2_CHIP_ICON_SZ) if icon_file else None
         tw, th    = text_size(draw, c, chip_font)
-        row_h     = max(chip_icon_sz, th)
+        row_h     = max(P2_CHIP_ICON_SZ, th)
 
         if icon:
-            iy = cur_y + (row_h - chip_icon_sz) // 2
-            canvas.alpha_composite(icon, (INFO_X, iy))
+            iy = cur_y + (row_h - P2_CHIP_ICON_SZ) // 2
+            canvas.alpha_composite(icon, (IX, iy))
             draw = ImageDraw.Draw(canvas)
-            tx = INFO_X + chip_icon_sz + 10
+            tx = IX + P2_CHIP_ICON_SZ + 12
         else:
-            tx = INFO_X
+            tx = IX
 
+        # Baseline-align text to icon centre
         ty = cur_y + (row_h - th) // 2
-        draw.text((tx, ty), c, font=chip_font, fill=chip_text_color)
-        cur_y += row_h + 14
+        # Drop shadow for chip label readability
+        draw_text_with_shadow(draw, tx, ty, c, chip_font,
+                              fill=panel_text, shadow_color=P2_CHIP_SHADOW, shadow_offset=2)
 
-    # CTA — pinned to bottom of info panel
+        cur_y += row_h + P2_CHIP_ROW_GAP
+
+    # CTA pill — pinned to bottom inside panel
     cta_text  = "READY STOCK \u2022 FAST SHIP"
     cta_font  = load_font_bold(18)
-    cta_pad_x, cta_pad_y = 14, 6
+    cpx, cpy  = 14, 6
     cta_tw, cta_th = text_size(draw, cta_text, cta_font)
-    cta_w = cta_tw + cta_pad_x * 2
-    cta_h = cta_th + cta_pad_y * 2
-    cta_y0 = H - PAD_Y_BOT - cta_h
-    draw_sticker_pill(draw, INFO_X, cta_y0,
-                      INFO_X + cta_w, cta_y0 + cta_h,
-                      cta_text, cta_font)
+    cta_w     = cta_tw + cpx * 2
+    cta_h     = cta_th + cpy * 2
+    cta_y0    = P2_PANEL_Y1 - P2_PANEL_PAD - cta_h
+    draw_sticker_pill(draw, IX, cta_y0, IX + cta_w, cta_y0 + cta_h, cta_text, cta_font)
 
-    # 7) Output PNG
+    # ── Output PNG ────────────────────────────────────────────────────────────
     out = BytesIO()
     canvas.convert("RGBA").save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
