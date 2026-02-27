@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3 v2026-02-27b"
+VERSION = "P1+P2+P3 v2026-02-27c"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -549,7 +549,7 @@ def render_p2(key: str = Query(...)):
 # =====================================================================
 
 # Hero occupies 50% of canvas height — smaller than P1 to fit spec table
-P3_FIT_RATIO    = 0.50
+P3_FIT_RATIO    = 0.55
 P3_HERO_X_SHIFT = 50           # slight right shift (px) to mirror P1 composition
 
 # Spec table geometry
@@ -593,7 +593,7 @@ def _render_p3(
     top_pad      = 44
     BOTTOM_SAFE  = 28
     CHIP_TOP_GAP = 14
-    SPEC_GAP_Y   = 16
+    SPEC_GAP_Y   = 32
 
     # ── Header: brand + model (top-left) ──────────────────────────────
     header_left  = pad
@@ -603,14 +603,14 @@ def _render_p3(
     brand_text = (brand or "").strip().upper()
     brand_font, brand_text = fit_text(
         draw, brand_text, max_w=header_max_w,
-        start_size=54, min_size=32, loader=load_font_regular,
+        start_size=60, min_size=32, loader=load_font_regular,
     )
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
     model_text = (model or "").strip().upper()
     model_font, model_text = fit_text(
         draw, model_text, max_w=header_max_w,
-        start_size=190, min_size=68, loader=load_font_bold,
+        start_size=210, min_size=68, loader=load_font_bold,
     )
     model_y = header_top + brand_h - 6
 
@@ -735,7 +735,7 @@ def _render_p3(
 
     # Column positions: label left, value right-of-centre
     col_label_x = table_x0 + 24
-    col_value_x = table_x0 + table_w // 2 + 8
+    col_value_x = table_x0 + int(table_w * 0.38)
 
     is_dark = (theme or "").lower() in _P3_DARK_THEMES
     label_fill  = (255, 255, 255, 160) if is_dark else (60, 60, 60, 180)
