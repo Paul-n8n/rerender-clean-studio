@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3 v2026-02-27e"
+VERSION = "P1+P2+P3 v2026-02-27f"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -625,10 +625,10 @@ def render_p2(key: str = Query(...)):
 
 # =====================================================================
 # /render/p3 — Spec Card (Technical Validation Slide)
-# Layout: Brand + Model header, size-range badge, hero (50% height),
-#         3 highlight chips, spec table (4 rows: gear ratio, drag,
-#         weight, line capacity).  Spec params default to "—" so the
-#         card renders with placeholders until parsed ranges are ready.
+# Layout: Brand + Model header, size-range badge, hero (55% height),
+#         3 highlight chips (BB · gear ratio · max drag), spec table
+#         (3 rows: gear ratio, max drag, weight).  Line capacity omitted
+#         — varies per size; surfaced as chip3 instead.
 # Canvas: 1024×1024, themed background (same assets as P1).
 # =====================================================================
 
@@ -641,7 +641,7 @@ P3_SPEC_ROW_H      = 48           # height of each spec data row (px)  — was 4
 P3_SPEC_PAD_Y      = 12           # inner vertical padding top/bottom    — was 10
 P3_SPEC_HEADER_H   = 30           # height of "TECH SPECS" header row inside pill
 P3_SPEC_RADIUS     = 14           # corner radius of table background pill
-P3_SPEC_LABELS     = ["Gear Ratio", "Max Drag", "Weight", "Line Cap."]
+P3_SPEC_LABELS     = ["Gear Ratio", "Max Drag", "Weight"]   # 3 rows; Line Cap. removed (varies per size)
 
 # Subtle table background: dark themes get white tint, light themes get dark tint
 _P3_SPEC_BG_DARK  = (255, 255, 255, 28)   # white overlay on teal/navy  — slightly more visible
@@ -661,9 +661,12 @@ def _render_p3(
     gear_ratio: str,
     max_drag: str,
     weight: str,
-    line_capacity: str,
 ) -> bytes:
-    """Compose a 1024×1024 P3 spec card and return raw PNG bytes."""
+    """Compose a 1024×1024 P3 spec card and return raw PNG bytes.
+    Chips: chip1=BB count, chip2=gear ratio, chip3=max drag (range).
+    Spec table: Gear Ratio / Max Drag / Weight (3 rows).
+    Line capacity omitted — varies per size variant.
+    """
     W, H = 1024, 1024
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw   = ImageDraw.Draw(canvas)
@@ -719,7 +722,7 @@ def _render_p3(
     total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
 
     # ── Spec table metrics ────────────────────────────────────────────
-    spec_values  = [gear_ratio, max_drag, weight, line_capacity]
+    spec_values  = [gear_ratio, max_drag, weight]
     n_rows       = len(P3_SPEC_LABELS)
     # Total pill height = top-pad + header + data rows + bottom-pad
     spec_table_h = P3_SPEC_PAD_Y + P3_SPEC_HEADER_H + n_rows * P3_SPEC_ROW_H + P3_SPEC_PAD_Y
@@ -868,25 +871,26 @@ def render_p3(
     key:           str = Query(...),
     brand:         str = Query("Daiwa"),
     model:         str = Query("RS"),
-    chip1:         str = Query("3BB"),
-    chip2:         str = Query("5.1:1"),
-    chip3:         str = Query("READY STOCK"),
+    chip1:         str = Query("3BB"),          # e.g. "5+1BB"
+    chip2:         str = Query("5.1:1"),         # e.g. "5.1–6.2:1"
+    chip3:         str = Query("6 kg"),          # max drag — e.g. "6–12 kg"
     theme:         str = Query("yellow"),
     size_range:    str = Query("RS1000-6000"),
     gear_ratio:    str = Query("\u2014"),
     max_drag:      str = Query("\u2014"),
     weight:        str = Query("\u2014"),
-    line_capacity: str = Query("\u2014"),
+    line_capacity: str = Query("\u2014"),        # accepted but not rendered (varies per size)
 ):
     """
     P3 — spec card. Themed background, brand/model header, size-range
-    badge, hero at 50 % height, 3 highlight chips, 4-row spec table.
-    Spec params (gear_ratio, max_drag, weight, line_capacity) default
-    to em-dash so the card renders cleanly with placeholders.
+    badge, hero at 55% height, 3 highlight chips, 3-row spec table
+    (Gear Ratio / Max Drag / Weight).
+    chip3 = max drag range shown as scannable chip.
+    line_capacity accepted for forward-compat but not rendered.
     """
     hero = _load_hero(key)
     png  = _render_p3(
         hero, theme, brand, model, chip1, chip2, chip3,
-        size_range, gear_ratio, max_drag, weight, line_capacity,
+        size_range, gear_ratio, max_drag, weight,
     )
     return Response(content=png, media_type="image/png")
