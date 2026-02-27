@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2 v2026-02-26d"
+VERSION = "P1+P2 v2026-02-26e"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -477,7 +477,7 @@ def render_p1(
 # =====================================================================
 # /render/p2 — Pure photo output (no text, no chips)
 # Pipeline: 1024×1024 white canvas → alpha shadow → centered cutout
-# Shadow params locked: dx=0 dy=18 blur=28 opacity=18%
+# Shadow params locked: dx=0 dy=15 blur=20 opacity=11%
 # Product fit: 78% of canvas height, horizontally centred
 # =====================================================================
 
@@ -485,9 +485,9 @@ P2_CANVAS_W  = 1024
 P2_CANVAS_H  = 1024
 P2_FIT_RATIO = 0.78          # product occupies 78% of canvas height
 P2_SHADOW_DX = 0             # shadow x-offset (px)
-P2_SHADOW_DY = 18            # shadow y-offset (px)
-P2_SHADOW_BLUR   = 28        # gaussian blur radius
-P2_SHADOW_ALPHA  = 46        # 18% of 255 ≈ 46
+P2_SHADOW_DY = 15            # shadow y-offset (px)  — was 18, reduced to soften
+P2_SHADOW_BLUR   = 20        # gaussian blur radius  — was 28, reduced to cut ring
+P2_SHADOW_ALPHA  = 28        # 11% of 255 ≈ 28      — was 46 (18%), now ~11%
 
 
 def _render_p2_white(hero: Image.Image) -> bytes:
