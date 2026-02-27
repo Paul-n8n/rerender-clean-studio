@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2 v2026-02-26c"
+VERSION = "P1+P2 v2026-02-26d"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -474,16 +474,66 @@ def render_p1(
     return Response(content=png, media_type="image/png")
 
 
+# =====================================================================
+# /render/p2 — Pure photo output (no text, no chips)
+# Pipeline: 1024×1024 white canvas → alpha shadow → centered cutout
+# Shadow params locked: dx=0 dy=18 blur=28 opacity=18%
+# Product fit: 78% of canvas height, horizontally centred
+# =====================================================================
+
+P2_CANVAS_W  = 1024
+P2_CANVAS_H  = 1024
+P2_FIT_RATIO = 0.78          # product occupies 78% of canvas height
+P2_SHADOW_DX = 0             # shadow x-offset (px)
+P2_SHADOW_DY = 18            # shadow y-offset (px)
+P2_SHADOW_BLUR   = 28        # gaussian blur radius
+P2_SHADOW_ALPHA  = 46        # 18% of 255 ≈ 46
+
+
+def _render_p2_white(hero: Image.Image) -> bytes:
+    """
+    Composite a transparent-background cutout onto a white 1024×1024 canvas
+    with a deterministic alpha-derived drop shadow.
+    """
+    W, H = P2_CANVAS_W, P2_CANVAS_H
+
+    # --- Scale hero to fit 78% of canvas height ---
+    hw, hh  = hero.size
+    target_h = int(H * P2_FIT_RATIO)
+    scale    = target_h / hh
+    new_w    = max(1, int(hw * scale))
+    new_h    = max(1, int(hh * scale))
+    hero_rs  = hero.resize((new_w, new_h), Image.LANCZOS)
+
+    # --- Centred placement ---
+    px = (W - new_w) // 2
+    py = (H - new_h) // 2
+
+    # --- Build alpha-based shadow ---
+    # Extract alpha channel of the resized hero, blur it, fill with shadow colour
+    shadow_base = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    alpha_mask   = hero_rs.split()[3]                    # alpha channel
+    silhouette   = Image.new("RGBA", (new_w, new_h), (0, 0, 0, P2_SHADOW_ALPHA))
+    silhouette.putalpha(alpha_mask)
+    shadow_base.paste(silhouette, (px + P2_SHADOW_DX, py + P2_SHADOW_DY))
+    shadow_blurred = shadow_base.filter(ImageFilter.GaussianBlur(radius=P2_SHADOW_BLUR))
+
+    # --- Composite: white → shadow → hero ---
+    canvas = Image.new("RGBA", (W, H), (255, 255, 255, 255))
+    canvas.alpha_composite(shadow_blurred)
+    canvas.alpha_composite(hero_rs, (px, py))
+
+    out = BytesIO()
+    canvas.convert("RGB").save(out, format="PNG")   # RGB — no transparency needed
+    return out.getvalue()
+
+
 @app.get("/render/p2")
-def render_p2(
-    key:   str = Query(...),
-    brand: str = Query("Daiwa"),
-    model: str = Query("RS"),
-    chip1: str = Query("3BB"),
-    chip2: str = Query("5.1:1"),
-    chip3: str = Query("RS1000-6000"),
-    theme: str = Query("yellow"),
-):
-    """P2 — same layout as P1, different source photo slot (angle cutout)."""
-    png = _render_product(_load_hero(key), theme, brand, model, chip1, chip2, chip3)
-    return Response(content=png, media_type="image/png")
+def render_p2(key: str = Query(...)):
+    """
+    P2 — pure beauty shot.
+    White background, deterministic shadow, no text.
+    Only 'key' (R2 path to transparent cutout) is required.
+    """
+    hero = _load_hero(key)
+    return Response(content=_render_p2_white(hero), media_type="image/png")
