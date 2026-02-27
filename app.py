@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3 v2026-02-27d"
+VERSION = "P1+P2+P3 v2026-02-27e"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -223,7 +223,8 @@ def _draw_spec_value(draw, x, row_top, row_h, text, font, fill, max_w):
         return
 
     # ── 2. Find best two-line split ──────────────────────────────────
-    SPLIT_CHARS = {' ', '/', ',', ';', '|'}
+    # '\u00b7' = middle-dot (·) recommended canonical separator for line_capacity
+    SPLIT_CHARS = {' ', '/', ',', ';', '|', '\u00b7'}
     best_split  = None
     best_delta  = None   # lower = more balanced
 
@@ -236,7 +237,8 @@ def _draw_spec_value(draw, x, row_top, row_h, text, font, fill, max_w):
             # Keep slash on line 1 (e.g. "PE0.8-200m/" / "PE1.0-150m")
             l1 = text[:pos + 1]
             l2 = text[pos + 1:].lstrip()
-        elif ch in (',', ';', '|'):
+        elif ch in (',', ';', '|', '\u00b7'):
+            # Strip separator itself from both sides
             l1 = text[:pos].rstrip()
             l2 = text[pos + 1:].lstrip()
         else:  # space
