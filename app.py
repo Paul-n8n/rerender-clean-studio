@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3 v2026-02-27a"
+VERSION = "P1+P2+P3 v2026-02-27b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -553,14 +553,15 @@ P3_FIT_RATIO    = 0.50
 P3_HERO_X_SHIFT = 50           # slight right shift (px) to mirror P1 composition
 
 # Spec table geometry
-P3_SPEC_ROW_H   = 44           # height of each spec data row (px)
-P3_SPEC_PAD_Y   = 10           # inner vertical padding inside table box (px)
-P3_SPEC_RADIUS  = 14           # corner radius of table background pill
-P3_SPEC_LABELS  = ["Gear Ratio", "Max Drag", "Weight", "Line Cap."]
+P3_SPEC_ROW_H      = 48           # height of each spec data row (px)  — was 44
+P3_SPEC_PAD_Y      = 12           # inner vertical padding top/bottom    — was 10
+P3_SPEC_HEADER_H   = 30           # height of "TECH SPECS" header row inside pill
+P3_SPEC_RADIUS     = 14           # corner radius of table background pill
+P3_SPEC_LABELS     = ["Gear Ratio", "Max Drag", "Weight", "Line Cap."]
 
 # Subtle table background: dark themes get white tint, light themes get dark tint
-_P3_SPEC_BG_DARK  = (255, 255, 255, 22)   # white overlay on teal/navy
-_P3_SPEC_BG_LIGHT = (0,   0,   0,   16)   # black overlay on yellow/grey
+_P3_SPEC_BG_DARK  = (255, 255, 255, 28)   # white overlay on teal/navy  — slightly more visible
+_P3_SPEC_BG_LIGHT = (0,   0,   0,   20)   # black overlay on yellow/grey
 _P3_DARK_THEMES   = {"teal", "navy"}
 
 
@@ -636,10 +637,12 @@ def _render_p3(
     # ── Spec table metrics ────────────────────────────────────────────
     spec_values  = [gear_ratio, max_drag, weight, line_capacity]
     n_rows       = len(P3_SPEC_LABELS)
-    spec_table_h = n_rows * P3_SPEC_ROW_H + P3_SPEC_PAD_Y * 2
+    # Total pill height = top-pad + header + data rows + bottom-pad
+    spec_table_h = P3_SPEC_PAD_Y + P3_SPEC_HEADER_H + n_rows * P3_SPEC_ROW_H + P3_SPEC_PAD_Y
 
-    spec_font_label = load_font_regular(26)
-    spec_font_value = load_font_bold(26)
+    spec_font_label  = load_font_regular(26)
+    spec_font_value  = load_font_bold(26)
+    spec_font_header = load_font_bold(18)      # "TECH SPECS" section label
 
     # ── Hero: scale to 50% canvas height ─────────────────────────────
     hw, hh   = hero.size
@@ -735,11 +738,26 @@ def _render_p3(
     col_value_x = table_x0 + table_w // 2 + 8
 
     is_dark = (theme or "").lower() in _P3_DARK_THEMES
-    label_fill = (255, 255, 255, 170) if is_dark else (60, 60, 60, 180)
+    label_fill  = (255, 255, 255, 160) if is_dark else (60, 60, 60, 180)
+    header_fill = (255, 255, 255, 110) if is_dark else (80, 80, 80, 140)
+
+    # ── "TECH SPECS" header row ────────────────────────────────────────
+    header_text_y = table_y + P3_SPEC_PAD_Y + (P3_SPEC_HEADER_H - 18) // 2
+    draw.text((col_label_x, header_text_y), "TECH SPECS", font=spec_font_header, fill=header_fill)
+
+    # Thin divider below header
+    header_div_y = table_y + P3_SPEC_PAD_Y + P3_SPEC_HEADER_H - 1
+    draw.line(
+        [(table_x0 + 16, header_div_y), (table_x1 - 16, header_div_y)],
+        fill=divider_color, width=1,
+    )
+
+    # ── Data rows (start below header) ────────────────────────────────
+    data_top = table_y + P3_SPEC_PAD_Y + P3_SPEC_HEADER_H   # y where first data row begins
 
     for i, (label, value) in enumerate(zip(P3_SPEC_LABELS, spec_values)):
-        row_top  = table_y + P3_SPEC_PAD_Y + i * P3_SPEC_ROW_H
-        text_y   = row_top + (P3_SPEC_ROW_H - 26) // 2
+        row_top = data_top + i * P3_SPEC_ROW_H
+        text_y  = row_top + (P3_SPEC_ROW_H - 26) // 2
 
         draw.text((col_label_x, text_y), label, font=spec_font_label, fill=label_fill)
         draw.text((col_value_x, text_y), value, font=spec_font_value, fill=text_color)
