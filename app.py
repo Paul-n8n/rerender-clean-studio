@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2 v2026-02-26e"
+VERSION = "P1+P2+P3 v2026-02-27a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -537,3 +537,250 @@ def render_p2(key: str = Query(...)):
     """
     hero = _load_hero(key)
     return Response(content=_render_p2_white(hero), media_type="image/png")
+
+
+# =====================================================================
+# /render/p3 — Spec Card (Technical Validation Slide)
+# Layout: Brand + Model header, size-range badge, hero (50% height),
+#         3 highlight chips, spec table (4 rows: gear ratio, drag,
+#         weight, line capacity).  Spec params default to "—" so the
+#         card renders with placeholders until parsed ranges are ready.
+# Canvas: 1024×1024, themed background (same assets as P1).
+# =====================================================================
+
+# Hero occupies 50% of canvas height — smaller than P1 to fit spec table
+P3_FIT_RATIO    = 0.50
+P3_HERO_X_SHIFT = 50           # slight right shift (px) to mirror P1 composition
+
+# Spec table geometry
+P3_SPEC_ROW_H   = 44           # height of each spec data row (px)
+P3_SPEC_PAD_Y   = 10           # inner vertical padding inside table box (px)
+P3_SPEC_RADIUS  = 14           # corner radius of table background pill
+P3_SPEC_LABELS  = ["Gear Ratio", "Max Drag", "Weight", "Line Cap."]
+
+# Subtle table background: dark themes get white tint, light themes get dark tint
+_P3_SPEC_BG_DARK  = (255, 255, 255, 22)   # white overlay on teal/navy
+_P3_SPEC_BG_LIGHT = (0,   0,   0,   16)   # black overlay on yellow/grey
+_P3_DARK_THEMES   = {"teal", "navy"}
+
+
+def _render_p3(
+    hero: Image.Image,
+    theme: str,
+    brand: str,
+    model: str,
+    chip1: str,
+    chip2: str,
+    chip3: str,
+    size_range: str,
+    gear_ratio: str,
+    max_drag: str,
+    weight: str,
+    line_capacity: str,
+) -> bytes:
+    """Compose a 1024×1024 P3 spec card and return raw PNG bytes."""
+    W, H = 1024, 1024
+    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+    draw   = ImageDraw.Draw(canvas)
+
+    tc              = get_theme_colors(theme)
+    text_color      = tc["text"]
+    chip_text_color = tc["chip_text"]
+    divider_color   = tc["divider"]
+
+    pad          = 56
+    top_pad      = 44
+    BOTTOM_SAFE  = 28
+    CHIP_TOP_GAP = 14
+    SPEC_GAP_Y   = 16
+
+    # ── Header: brand + model (top-left) ──────────────────────────────
+    header_left  = pad
+    header_top   = top_pad
+    header_max_w = int(W * 0.62) - header_left
+
+    brand_text = (brand or "").strip().upper()
+    brand_font, brand_text = fit_text(
+        draw, brand_text, max_w=header_max_w,
+        start_size=54, min_size=32, loader=load_font_regular,
+    )
+    brand_h = text_size(draw, brand_text, brand_font)[1]
+
+    model_text = (model or "").strip().upper()
+    model_font, model_text = fit_text(
+        draw, model_text, max_w=header_max_w,
+        start_size=190, min_size=68, loader=load_font_bold,
+    )
+    model_y = header_top + brand_h - 6
+
+    # ── Chip metrics ──────────────────────────────────────────────────
+    chip_font  = load_font_bold(34)
+    features   = [(chip1 or "").strip(), (chip2 or "").strip(), (chip3 or "").strip()]
+    features   = [c for c in features if c]
+
+    chip_groups = []
+    for i, c in enumerate(features):
+        tw, th    = text_size(draw, c, chip_font)
+        icon_file = CHIP_ICONS.get(i)
+        icon      = load_icon(icon_file, ICON_SIZE) if icon_file else None
+        icon_w    = ICON_SIZE if icon else 0
+        group_w   = (icon_w + ICON_TEXT_GAP + tw) if icon else tw
+        group_h   = max(ICON_SIZE, th)
+        chip_groups.append((c, tw, th, group_w, group_h, icon, icon_w))
+
+    chip_row_h    = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
+    num_dividers  = max(0, len(chip_groups) - 1)
+    total_chips_w = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
+    total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
+
+    # ── Spec table metrics ────────────────────────────────────────────
+    spec_values  = [gear_ratio, max_drag, weight, line_capacity]
+    n_rows       = len(P3_SPEC_LABELS)
+    spec_table_h = n_rows * P3_SPEC_ROW_H + P3_SPEC_PAD_Y * 2
+
+    spec_font_label = load_font_regular(26)
+    spec_font_value = load_font_bold(26)
+
+    # ── Hero: scale to 50% canvas height ─────────────────────────────
+    hw, hh   = hero.size
+    target_h = int(H * P3_FIT_RATIO)
+    scale    = target_h / hh
+    new_w    = max(1, int(hw * scale))
+    new_h    = max(1, int(hh * scale))
+    hero_rs  = hero.resize((new_w, new_h), Image.LANCZOS)
+
+    # Position: slight right offset, leave room below for chips + spec table
+    needed_below = CHIP_TOP_GAP + chip_row_h + SPEC_GAP_Y + spec_table_h + BOTTOM_SAFE
+    px = (W - new_w) // 2 + P3_HERO_X_SHIFT
+    px = max(px, pad)
+    px = min(px, W - new_w - 10)
+    py = int(H * 0.18)
+    max_hero_bottom = H - needed_below
+    if py + new_h > max_hero_bottom:
+        py = max(top_pad + 20, max_hero_bottom - new_h)
+    hero_bottom = py + new_h
+
+    # ── Draw text header ──────────────────────────────────────────────
+    draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, text_color)
+    draw_text_align_left(draw, header_left, model_y,    model_text, model_font, text_color)
+
+    # ── Size range badge (top-right) ──────────────────────────────────
+    sr_text = (size_range or "").strip()
+    if sr_text:
+        badge_font = load_font_bold(34)
+        bpx, bpy   = 20, 10
+        btw, bth   = text_size(draw, sr_text, badge_font)
+        bw, bh     = btw + bpx * 2, bth + bpy * 2
+        bx1        = W - pad
+        by0        = top_pad + 10
+        bx0        = bx1 - bw
+        by1        = by0 + bh
+        draw_sticker_pill(draw, bx0, by0, bx1, by1, sr_text, badge_font)
+
+    # ── Glow + hero composite ─────────────────────────────────────────
+    draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2)
+    draw = ImageDraw.Draw(canvas)
+    canvas.alpha_composite(hero_rs, (px, py))
+    draw = ImageDraw.Draw(canvas)
+
+    # ── Chips row ─────────────────────────────────────────────────────
+    chip_y_top    = hero_bottom + CHIP_TOP_GAP
+    chip_y_center = chip_y_top + chip_row_h // 2
+    chip_start_x  = (W - total_chips_w) // 2
+    cur_x         = chip_start_x
+
+    for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
+        if icon:
+            icon_y = chip_y_center - ICON_SIZE // 2
+            canvas.alpha_composite(icon, (cur_x, icon_y))
+            draw   = ImageDraw.Draw(canvas)
+            text_x = cur_x + icon_w + ICON_TEXT_GAP
+        else:
+            text_x = cur_x
+        bbox   = draw.textbbox((0, 0), c, font=chip_font)
+        text_h = bbox[3] - bbox[1]
+        text_y = chip_y_center - text_h // 2 - bbox[1]
+        draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
+        cur_x += gw
+        if idx < len(chip_groups) - 1:
+            div_x     = cur_x + CHIP_GAP_X // 2
+            div_y_top = chip_y_center - int(chip_row_h * 0.35)
+            div_y_bot = chip_y_center + int(chip_row_h * 0.35)
+            draw.line([(div_x, div_y_top), (div_x, div_y_bot)],
+                      fill=divider_color, width=DIVIDER_WIDTH)
+            cur_x += CHIP_GAP_X + DIVIDER_WIDTH
+
+    chips_bottom = chip_y_top + chip_row_h
+
+    # ── Spec table ────────────────────────────────────────────────────
+    table_y  = chips_bottom + SPEC_GAP_Y
+    table_x0 = pad
+    table_x1 = W - pad
+    table_w  = table_x1 - table_x0
+
+    # Subtle translucent background pill
+    spec_bg      = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    spec_bg_draw = ImageDraw.Draw(spec_bg)
+    bg_fill      = _P3_SPEC_BG_DARK if (theme or "").lower() in _P3_DARK_THEMES else _P3_SPEC_BG_LIGHT
+    spec_bg_draw.rounded_rectangle(
+        (table_x0, table_y, table_x1, table_y + spec_table_h),
+        radius=P3_SPEC_RADIUS,
+        fill=bg_fill,
+    )
+    canvas.alpha_composite(spec_bg)
+    draw = ImageDraw.Draw(canvas)
+
+    # Column positions: label left, value right-of-centre
+    col_label_x = table_x0 + 24
+    col_value_x = table_x0 + table_w // 2 + 8
+
+    is_dark = (theme or "").lower() in _P3_DARK_THEMES
+    label_fill = (255, 255, 255, 170) if is_dark else (60, 60, 60, 180)
+
+    for i, (label, value) in enumerate(zip(P3_SPEC_LABELS, spec_values)):
+        row_top  = table_y + P3_SPEC_PAD_Y + i * P3_SPEC_ROW_H
+        text_y   = row_top + (P3_SPEC_ROW_H - 26) // 2
+
+        draw.text((col_label_x, text_y), label, font=spec_font_label, fill=label_fill)
+        draw.text((col_value_x, text_y), value, font=spec_font_value, fill=text_color)
+
+        # Row divider (not after last row)
+        if i < n_rows - 1:
+            div_y = row_top + P3_SPEC_ROW_H - 1
+            draw.line(
+                [(table_x0 + 16, div_y), (table_x1 - 16, div_y)],
+                fill=divider_color, width=1,
+            )
+
+    out = BytesIO()
+    canvas.convert("RGBA").save(out, format="PNG")
+    return out.getvalue()
+
+
+@app.get("/render/p3")
+def render_p3(
+    key:           str = Query(...),
+    brand:         str = Query("Daiwa"),
+    model:         str = Query("RS"),
+    chip1:         str = Query("3BB"),
+    chip2:         str = Query("5.1:1"),
+    chip3:         str = Query("READY STOCK"),
+    theme:         str = Query("yellow"),
+    size_range:    str = Query("RS1000-6000"),
+    gear_ratio:    str = Query("\u2014"),
+    max_drag:      str = Query("\u2014"),
+    weight:        str = Query("\u2014"),
+    line_capacity: str = Query("\u2014"),
+):
+    """
+    P3 — spec card. Themed background, brand/model header, size-range
+    badge, hero at 50 % height, 3 highlight chips, 4-row spec table.
+    Spec params (gear_ratio, max_drag, weight, line_capacity) default
+    to em-dash so the card renders cleanly with placeholders.
+    """
+    hero = _load_hero(key)
+    png  = _render_p3(
+        hero, theme, brand, model, chip1, chip2, chip3,
+        size_range, gear_ratio, max_drag, weight, line_capacity,
+    )
+    return Response(content=png, media_type="image/png")
