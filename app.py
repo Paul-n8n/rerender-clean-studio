@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3 v2026-02-27c"
+VERSION = "P1+P2+P3 v2026-02-27d"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -195,6 +195,88 @@ def draw_text_with_shadow(draw, x, y, text, font, fill, shadow_color=(0, 0, 0, 1
     for dx, dy in [(-1, shadow_offset), (1, shadow_offset), (0, shadow_offset), (0, 1)]:
         draw.text((x + dx, y + dy), text, font=font, fill=shadow_color)
     draw.text((x, y), text, font=font, fill=fill)
+
+
+def _draw_spec_value(draw, x, row_top, row_h, text, font, fill, max_w):
+    """
+    Render a spec table value within a fixed-height row.
+
+    Strategy (in order):
+      1. Single line  — draw centered if it fits within max_w.
+      2. Two lines    — split at the best natural break (space, slash,
+                        comma, semicolon, pipe) so BOTH halves fit.
+                        Prefer the split that most evenly balances widths.
+      3. Truncate     — if no clean split exists, truncate line 1 with '…'.
+
+    Row height is never changed; the caller owns layout geometry.
+    """
+    def _place_single(t, cy):
+        bbox = draw.textbbox((0, 0), t, font=font)
+        draw.text((x, cy - bbox[1]), t, font=font, fill=fill)
+
+    _, lh = text_size(draw, text, font)
+    w, _  = text_size(draw, text, font)
+
+    # ── 1. Fits on one line ──────────────────────────────────────────
+    if w <= max_w:
+        _place_single(text, row_top + (row_h - lh) // 2)
+        return
+
+    # ── 2. Find best two-line split ──────────────────────────────────
+    SPLIT_CHARS = {' ', '/', ',', ';', '|'}
+    best_split  = None
+    best_delta  = None   # lower = more balanced
+
+    for pos in range(1, len(text)):
+        ch = text[pos]
+        if ch not in SPLIT_CHARS:
+            continue
+
+        if ch == '/':
+            # Keep slash on line 1 (e.g. "PE0.8-200m/" / "PE1.0-150m")
+            l1 = text[:pos + 1]
+            l2 = text[pos + 1:].lstrip()
+        elif ch in (',', ';', '|'):
+            l1 = text[:pos].rstrip()
+            l2 = text[pos + 1:].lstrip()
+        else:  # space
+            l1 = text[:pos]
+            l2 = text[pos + 1:]
+
+        if not l1 or not l2:
+            continue
+
+        w1, _ = text_size(draw, l1, font)
+        w2, _ = text_size(draw, l2, font)
+
+        if w1 <= max_w and w2 <= max_w:
+            delta = abs(w1 - w2)
+            if best_delta is None or delta < best_delta:
+                best_split = (l1, l2)
+                best_delta = delta
+
+    if best_split:
+        l1, l2 = best_split
+        _, lh1 = text_size(draw, l1, font)
+        _, lh2 = text_size(draw, l2, font)
+        gap     = 1
+        total_h = lh1 + gap + lh2
+        y1 = row_top + max(0, (row_h - total_h) // 2)
+        y2 = y1 + lh1 + gap
+        _place_single(l1, y1)
+        _place_single(l2, y2)
+        return
+
+    # ── 3. No clean split — truncate with '…' ───────────────────────
+    t = text
+    while len(t) > 1:
+        candidate = t[:-1].rstrip() + "…"
+        cw, _     = text_size(draw, candidate, font)
+        if cw <= max_w:
+            _place_single(candidate, row_top + (row_h - lh) // 2)
+            return
+        t = t[:-1]
+    _place_single(text[:1] + "…", row_top + (row_h - lh) // 2)
 
 
 def draw_radial_glow(canvas: Image.Image, center_x: int, center_y: int,
@@ -733,9 +815,10 @@ def _render_p3(
     canvas.alpha_composite(spec_bg)
     draw = ImageDraw.Draw(canvas)
 
-    # Column positions: label left, value right-of-centre
-    col_label_x = table_x0 + 24
-    col_value_x = table_x0 + int(table_w * 0.38)
+    # Column positions: label left (24px inset), value at 38% of table width
+    col_label_x  = table_x0 + 24
+    col_value_x  = table_x0 + int(table_w * 0.38)
+    max_value_w  = (table_x1 - 16) - col_value_x   # right edge minus 16px inset
 
     is_dark = (theme or "").lower() in _P3_DARK_THEMES
     label_fill  = (255, 255, 255, 160) if is_dark else (60, 60, 60, 180)
@@ -760,7 +843,10 @@ def _render_p3(
         text_y  = row_top + (P3_SPEC_ROW_H - 26) // 2
 
         draw.text((col_label_x, text_y), label, font=spec_font_label, fill=label_fill)
-        draw.text((col_value_x, text_y), value, font=spec_font_value, fill=text_color)
+        _draw_spec_value(
+            draw, col_value_x, row_top, P3_SPEC_ROW_H,
+            value, spec_font_value, text_color, max_value_w,
+        )
 
         # Row divider (not after last row)
         if i < n_rows - 1:
