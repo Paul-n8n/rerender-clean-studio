@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3 v2026-02-28a"
+VERSION = "P1+P2+P3+P4 v2026-02-28b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -943,4 +943,175 @@ def render_p3(
         hero, theme, brand, model, chip1, chip2, chip3,
         size_range, gear_ratio, max_drag, weight,
     )
+    return Response(content=png, media_type="image/png")
+
+
+# =====================================================================
+# /render/p4 — Feature Highlight Card
+# Layout: Compact Brand + Model header (top-left), auto-zoomed hero
+#         (120% scale, right-anchored, top-biased so spool/rotor is
+#         prominent), Feature Title + Tag pill + Feature Body block.
+# Hero:   Reuses P3_DETAIL_CUTOUT (already in R2).
+# Canvas: 1024×1024, themed background (same assets as P1/P3).
+# =====================================================================
+
+P4_HERO_SCALE  = 1.20   # hero height = 120% of canvas height
+P4_HERO_X_FRAC = 0.36   # hero left edge starts at 36% of W (right-anchored)
+P4_HERO_Y_BIAS = -0.06  # nudge hero upward (fraction of H) to expose spool
+P4_TEXT_W_FRAC = 0.42   # text block uses left 42% of canvas
+P4_FEAT_Y_FRAC = 0.52   # Feature block starts at 52% down canvas
+P4_TAG_PAD_X   = 14     # tag pill inner x padding
+P4_TAG_PAD_Y   = 7      # tag pill inner y padding
+
+
+def _wrap_lines_p4(draw, text: str, max_w: int, font) -> list:
+    """Wrap text into at most 2 lines that each fit within max_w.
+    Falls back to truncating with '…' if no word-split works."""
+    words = text.split()
+    if not words:
+        return [""]
+    if text_size(draw, text, font)[0] <= max_w:
+        return [text]
+    for i in range(1, len(words)):
+        l1 = ' '.join(words[:i])
+        l2 = ' '.join(words[i:])
+        if text_size(draw, l1, font)[0] <= max_w and text_size(draw, l2, font)[0] <= max_w:
+            return [l1, l2]
+    t = text
+    while len(t) > 1:
+        candidate = t[:-1].rstrip() + "\u2026"
+        if text_size(draw, candidate, font)[0] <= max_w:
+            return [candidate]
+        t = t[:-1]
+    return [text]
+
+
+def _render_p4(
+    hero: Image.Image,
+    theme: str,
+    brand: str,
+    model: str,
+    feature_title: str,
+    feature_body: str,
+    feature_tag: str,
+) -> bytes:
+    """Compose a 1024×1024 P4 Feature Highlight card and return raw PNG bytes."""
+    W, H   = 1024, 1024
+    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+    draw   = ImageDraw.Draw(canvas)
+
+    tc         = get_theme_colors(theme)
+    text_color = tc["text"]
+    is_dark    = (theme or "yellow").lower() in _P3_DARK_THEMES
+
+    pad        = 56
+    top_pad    = 44
+    text_max_w = int(W * P4_TEXT_W_FRAC) - pad
+
+    # ── Brand (compact 40pt) ──────────────────────────────────────────
+    brand_text = (brand or "").strip().upper()
+    brand_font, brand_text = fit_text(
+        draw, brand_text, max_w=text_max_w,
+        start_size=40, min_size=24, loader=load_font_regular,
+    )
+    brand_h = text_size(draw, brand_text, brand_font)[1]
+
+    # ── Model (compact, 80 → 32pt) ────────────────────────────────────
+    model_text = (model or "").strip().upper()
+    model_font, model_text = fit_text(
+        draw, model_text, max_w=text_max_w,
+        start_size=80, min_size=32, loader=load_font_bold,
+    )
+    model_h = text_size(draw, model_text, model_font)[1]
+
+    # ── Hero: 120% scale, right-anchored, top-biased ──────────────────
+    hw, hh  = hero.size
+    new_h   = max(1, int(H * P4_HERO_SCALE))
+    scale   = new_h / hh
+    new_w   = max(1, int(hw * scale))
+    hero_rs = hero.resize((new_w, new_h), Image.LANCZOS)
+    px      = int(W * P4_HERO_X_FRAC)
+    py      = int((H - new_h) / 2 + H * P4_HERO_Y_BIAS)
+
+    # ── Feature title metrics ─────────────────────────────────────────
+    title_text = (feature_title or "").strip().upper()
+    title_font, title_text = fit_text(
+        draw, title_text, max_w=text_max_w,
+        start_size=60, min_size=32, loader=load_font_bold,
+    )
+    title_h = text_size(draw, title_text, title_font)[1]
+
+    # ── Feature tag pill metrics ──────────────────────────────────────
+    tag_text = (feature_tag or "").strip()
+    tag_font = load_font_bold(28)
+    tag_bg   = STICKER_FILL              if is_dark else (20, 20, 20, 220)
+    tag_fg   = STICKER_TEXT              if is_dark else (255, 255, 255, 255)
+    tag_w = tag_h = 0
+    if tag_text:
+        tw, th = text_size(draw, tag_text, tag_font)
+        tag_w  = tw + P4_TAG_PAD_X * 2
+        tag_h  = th + P4_TAG_PAD_Y * 2
+
+    # ── Feature body metrics ──────────────────────────────────────────
+    body_text  = (feature_body or "").strip()
+    body_font  = load_font_regular(32)
+    body_lines = _wrap_lines_p4(draw, body_text, text_max_w, body_font)
+    body_lh    = text_size(draw, "Ag", body_font)[1]
+
+    # ── Glow + hero composite ─────────────────────────────────────────
+    draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2)
+    draw = ImageDraw.Draw(canvas)
+    canvas.alpha_composite(hero_rs, (px, py))
+    draw = ImageDraw.Draw(canvas)
+
+    # ── Brand + model header ──────────────────────────────────────────
+    draw_text_align_left(draw, pad, top_pad,               brand_text, brand_font, text_color)
+    draw_text_align_left(draw, pad, top_pad + brand_h - 4, model_text, model_font, text_color)
+
+    # Thin separator line below model
+    sep_y   = top_pad + brand_h - 4 + model_h + 10
+    sep_end = int(W * P4_TEXT_W_FRAC) - 10
+    sep_col = (text_color[0], text_color[1], text_color[2], 70)
+    draw.line([(pad, sep_y), (sep_end, sep_y)], fill=sep_col, width=2)
+
+    # ── Feature block ─────────────────────────────────────────────────
+    feat_y = int(H * P4_FEAT_Y_FRAC)
+
+    draw_text_align_left(draw, pad, feat_y, title_text, title_font, text_color)
+    feat_y += title_h + 10
+
+    if tag_text:
+        tx0, ty0 = pad, feat_y
+        tx1, ty1 = tx0 + tag_w, ty0 + tag_h
+        draw_rounded_rect(draw, (tx0, ty0, tx1, ty1), radius=8, fill=tag_bg)
+        draw.text((tx0 + P4_TAG_PAD_X, ty0 + P4_TAG_PAD_Y), tag_text, font=tag_font, fill=tag_fg)
+        feat_y += tag_h + 12
+
+    body_col = (text_color[0], text_color[1], text_color[2], 210)
+    for line in body_lines:
+        draw_text_align_left(draw, pad, feat_y, line, body_font, body_col)
+        feat_y += body_lh + 4
+
+    out = BytesIO()
+    canvas.convert("RGBA").save(out, format="PNG")
+    return out.getvalue()
+
+
+@app.get("/render/p4")
+def render_p4(
+    key:           str = Query(...),
+    brand:         str = Query("Daiwa"),
+    model:         str = Query("Procaster LT"),
+    theme:         str = Query("grey"),
+    feature_title: str = Query("POWER DRAG"),
+    feature_body:  str = Query("Smooth, strong drag for fighting big fish."),
+    feature_tag:   str = Query(""),
+):
+    """
+    P4 — Feature Highlight card.
+    Auto-zoomed hero (120% scale, right-anchored, top-biased),
+    compact Brand/Model header, Feature Title + Tag pill + Body block.
+    """
+    hero = _load_hero(key)
+    png  = _render_p4(hero, theme, brand, model, feature_title, feature_body, feature_tag)
     return Response(content=png, media_type="image/png")
