@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5 v2026-02-28f"
+VERSION = "P1+P2+P3+P4+P5 v2026-02-28g"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1196,6 +1196,8 @@ def _render_p5(
     W, H = 1024, 1024
 
     is_inhand = (slot_used == "P5_INHAND_CUTOUT")
+    pad       = 48
+    top_pad   = 36
 
     if is_inhand:
         # ── Full-bleed photo mode ──────────────────────────────────────
