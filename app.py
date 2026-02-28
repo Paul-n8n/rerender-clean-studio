@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5 v2026-02-28g"
+VERSION = "P1+P2+P3+P4+P5 v2026-02-28h"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1333,4 +1333,5 @@ def render_p5(
     """
     hero, slot_used = _load_p5_hero(product_key, group)
     png = _render_p5(hero, slot_used, theme, brand, model, chip1, chip2, badge)
-    return Response(content=png, media_type="image/png")
+    return Response(content=png, media_type="image/png",
+                    headers={"X-Used-Slot": slot_used})
