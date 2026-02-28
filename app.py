@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5 v2026-02-28e"
+VERSION = "P1+P2+P3+P4+P5 v2026-02-28f"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1185,37 +1185,65 @@ def _render_p5(
     chip2:     str,
     badge:     str,
 ) -> bytes:
-    """Compose a 1024×1024 P5 In-Hand Trust card and return raw PNG bytes."""
+    """Compose a 1024×1024 P5 Trust card and return raw PNG bytes.
+
+    Two rendering modes:
+      • Full-bleed  (slot_used == P5_INHAND_CUTOUT) — real photo covers
+        canvas, dark gradients top+bottom, white text always.
+      • Composite   (fallback slot) — themed background + centered cutout,
+        theme text colour. Avoids white-fringe artefacts on cutout edges.
+    """
     W, H = 1024, 1024
 
-    # ── Full-bleed background ─────────────────────────────────────────
-    canvas = _scale_to_cover(hero.convert("RGBA"), W, H)
-    draw   = ImageDraw.Draw(canvas)
+    is_inhand = (slot_used == "P5_INHAND_CUTOUT")
 
-    # Always white text — photo bg could be any colour
-    text_color = (255, 255, 255, 255)
+    if is_inhand:
+        # ── Full-bleed photo mode ──────────────────────────────────────
+        canvas = _scale_to_cover(hero.convert("RGBA"), W, H)
+        draw   = ImageDraw.Draw(canvas)
+        text_color = (255, 255, 255, 255)
 
-    pad     = 48
-    top_pad = 36
+        # Bottom gradient
+        bot_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        bg_draw  = ImageDraw.Draw(bot_grad)
+        bot_h    = int(H * P5_GRAD_BOTTOM_H)
+        for y in range(bot_h):
+            a = int(210 * (y / bot_h) ** 1.6)
+            bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
+        canvas.alpha_composite(bot_grad)
 
-    # ── Bottom gradient (ease-in dark) ────────────────────────────────
-    bot_grad  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    bg_draw   = ImageDraw.Draw(bot_grad)
-    bot_h     = int(H * P5_GRAD_BOTTOM_H)
-    for y in range(bot_h):
-        a = int(210 * (y / bot_h) ** 1.6)
-        bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
-    canvas.alpha_composite(bot_grad)
+        # Top gradient
+        top_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        tg_draw  = ImageDraw.Draw(top_grad)
+        top_h    = int(H * P5_GRAD_TOP_H)
+        for y in range(top_h):
+            a = int(170 * (1 - y / top_h) ** 1.8)
+            tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+        canvas.alpha_composite(top_grad)
+        draw = ImageDraw.Draw(canvas)
 
-    # ── Top gradient (ease-out dark) ─────────────────────────────────
-    top_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    tg_draw  = ImageDraw.Draw(top_grad)
-    top_h    = int(H * P5_GRAD_TOP_H)
-    for y in range(top_h):
-        a = int(170 * (1 - y / top_h) ** 1.8)
-        tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
-    canvas.alpha_composite(top_grad)
-    draw = ImageDraw.Draw(canvas)
+    else:
+        # ── Composite mode (fallback cutout on themed background) ──────
+        # Use themed bg so cutout edge anti-aliasing blends correctly
+        canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+        draw   = ImageDraw.Draw(canvas)
+        tc         = get_theme_colors(theme)
+        text_color = tc["text"]
+
+        # Scale hero to ~78% height, centred (same as P2 but with glow)
+        hw, hh  = hero.size
+        target_h = int(H * 0.78)
+        scale    = target_h / hh
+        new_w    = max(1, int(hw * scale))
+        new_h    = max(1, int(hh * scale))
+        hero_rs  = hero.resize((new_w, new_h), Image.LANCZOS)
+        px       = (W - new_w) // 2
+        py       = (H - new_h) // 2
+
+        draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2)
+        draw = ImageDraw.Draw(canvas)
+        canvas.alpha_composite(hero_rs, (px, py))
+        draw = ImageDraw.Draw(canvas)
 
     # ── Brand + model (top-left) ──────────────────────────────────────
     text_max_w = int(W * 0.62) - pad
