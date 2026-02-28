@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4 v2026-02-28c"
+VERSION = "P1+P2+P3+P4 v2026-02-28d"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1078,7 +1078,7 @@ def _render_p4(
     feat_y = int(H * P4_FEAT_Y_FRAC)
 
     draw_text_align_left(draw, pad, feat_y, title_text, title_font, text_color)
-    feat_y += title_h + 24
+    feat_y += title_h + 40
 
     if tag_text:
         tx0, ty0 = pad, feat_y
