@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4 v2026-02-28b"
+VERSION = "P1+P2+P3+P4 v2026-02-28c"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -959,7 +959,7 @@ P4_HERO_SCALE  = 1.20   # hero height = 120% of canvas height
 P4_HERO_X_FRAC = 0.36   # hero left edge starts at 36% of W (right-anchored)
 P4_HERO_Y_BIAS = -0.06  # nudge hero upward (fraction of H) to expose spool
 P4_TEXT_W_FRAC = 0.42   # text block uses left 42% of canvas
-P4_FEAT_Y_FRAC = 0.52   # Feature block starts at 52% down canvas
+P4_FEAT_Y_FRAC = 0.40   # Feature block starts at 40% down canvas
 P4_TAG_PAD_X   = 14     # tag pill inner x padding
 P4_TAG_PAD_Y   = 7      # tag pill inner y padding
 
@@ -1078,19 +1078,19 @@ def _render_p4(
     feat_y = int(H * P4_FEAT_Y_FRAC)
 
     draw_text_align_left(draw, pad, feat_y, title_text, title_font, text_color)
-    feat_y += title_h + 10
+    feat_y += title_h + 24
 
     if tag_text:
         tx0, ty0 = pad, feat_y
         tx1, ty1 = tx0 + tag_w, ty0 + tag_h
         draw_rounded_rect(draw, (tx0, ty0, tx1, ty1), radius=8, fill=tag_bg)
         draw.text((tx0 + P4_TAG_PAD_X, ty0 + P4_TAG_PAD_Y), tag_text, font=tag_font, fill=tag_fg)
-        feat_y += tag_h + 12
+        feat_y += tag_h + 28
 
     body_col = (text_color[0], text_color[1], text_color[2], 210)
     for line in body_lines:
         draw_text_align_left(draw, pad, feat_y, line, body_font, body_col)
-        feat_y += body_lh + 4
+        feat_y += body_lh + 10
 
     out = BytesIO()
     canvas.convert("RGBA").save(out, format="PNG")
