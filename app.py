@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3 v2026-02-27f"
+VERSION = "P1+P2+P3 v2026-02-28a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -153,6 +153,54 @@ def fit_text(draw, text, max_w, start_size, min_size=16, loader=load_font_regula
         if w <= max_w:
             return font, candidate
     return loader(min_size), text
+
+
+def fit_text_p3_model(draw, text, max_w, loader=load_font_bold):
+    """
+    Three-phase model name fitting for P3 cards.
+      Phase 1 – single line, shrink 210 → 80 (step 2)
+      Phase 2 – two-line word-wrap, shrink 136 → 52 (step 2),
+                 most-balanced split (minimises max line width)
+      Phase 3 – truncate at size 80 with "…"
+    Returns (font, line1, line2_or_None).
+    """
+    # ── Phase 1: single line ──────────────────────────────────────────
+    for size in range(210, 80 - 1, -2):
+        font = loader(size)
+        w, _ = text_size(draw, text, font)
+        if w <= max_w:
+            return font, text, None
+
+    # ── Phase 2: two-line wrap ────────────────────────────────────────
+    words = text.split()
+    if len(words) >= 2:
+        for size in range(136, 52 - 1, -2):
+            font = loader(size)
+            best = None
+            best_balance = float('inf')
+            for i in range(1, len(words)):
+                l1 = ' '.join(words[:i])
+                l2 = ' '.join(words[i:])
+                w1, _ = text_size(draw, l1, font)
+                w2, _ = text_size(draw, l2, font)
+                if w1 <= max_w and w2 <= max_w:
+                    balance = max(w1, w2)
+                    if balance < best_balance:
+                        best_balance = balance
+                        best = (l1, l2)
+            if best:
+                return font, best[0], best[1]
+
+    # ── Phase 3: truncate at size 80 ─────────────────────────────────
+    font = loader(80)
+    truncated = text
+    while len(truncated) > 1:
+        truncated = truncated[:-1].rstrip()
+        candidate = truncated + "…"
+        w, _ = text_size(draw, candidate, font)
+        if w <= max_w:
+            return font, candidate, None
+    return font, text, None
 
 
 # ---------- Drawing helpers ----------
@@ -695,11 +743,11 @@ def _render_p3(
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
     model_text = (model or "").strip().upper()
-    model_font, model_text = fit_text(
-        draw, model_text, max_w=header_max_w,
-        start_size=210, min_size=68, loader=load_font_bold,
+    model_font, model_line1, model_line2 = fit_text_p3_model(
+        draw, model_text, max_w=header_max_w, loader=load_font_bold,
     )
-    model_y = header_top + brand_h - 6
+    model_y      = header_top + brand_h - 6
+    model_line_h = text_size(draw, model_line1, model_font)[1]
 
     # ── Chip metrics ──────────────────────────────────────────────────
     chip_font  = load_font_bold(34)
@@ -751,8 +799,10 @@ def _render_p3(
     hero_bottom = py + new_h
 
     # ── Draw text header ──────────────────────────────────────────────
-    draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, text_color)
-    draw_text_align_left(draw, header_left, model_y,    model_text, model_font, text_color)
+    draw_text_align_left(draw, header_left, header_top, brand_text,  brand_font,  text_color)
+    draw_text_align_left(draw, header_left, model_y,    model_line1, model_font,  text_color)
+    if model_line2:
+        draw_text_align_left(draw, header_left, model_y + model_line_h + 2, model_line2, model_font, text_color)
 
     # ── Size range badge (top-right) ──────────────────────────────────
     sr_text = (size_range or "").strip()
