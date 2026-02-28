@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4 v2026-02-28d"
+VERSION = "P1+P2+P3+P4+P5 v2026-02-28e"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1114,4 +1114,193 @@ def render_p4(
     """
     hero = _load_hero(key)
     png  = _render_p4(hero, theme, brand, model, feature_title, feature_body, feature_tag)
+    return Response(content=png, media_type="image/png")
+
+
+# =====================================================================
+# /render/p5 — In-Hand / Trust Card
+# Layout: Full-bleed photo background (scale-to-cover, center crop),
+#         dark gradient top + bottom for text readability,
+#         Brand + Model header (top-left), Trust badge pill (top-right),
+#         2-chip row centered at bottom.
+# Fallback: P5_INHAND_CUTOUT → P2_ANGLE_CUTOUT → P3_DETAIL_CUTOUT
+#           → P1_HERO_CUTOUT  (tries each until one exists in R2).
+# Canvas: 1024×1024.  Output: RGB PNG (full-bleed, no transparency).
+# =====================================================================
+
+P5_GRAD_BOTTOM_H = 0.45   # bottom gradient covers this fraction of canvas
+P5_GRAD_TOP_H    = 0.22   # top gradient covers this fraction of canvas
+P5_CHIP_BOTTOM   = 52     # px from bottom edge to chip row baseline
+P5_CHIP_SIZE     = 38     # chip font size
+
+
+def _load_p5_hero(product_key: str, group: str):
+    """Try slots in priority order until one exists in R2.
+    Returns (PIL Image RGBA, slot_name_used)."""
+    slots = [
+        "P5_INHAND_CUTOUT",
+        "P2_ANGLE_CUTOUT",
+        "P3_DETAIL_CUTOUT",
+        "P1_HERO_CUTOUT",
+    ]
+    bucket = os.environ.get("R2_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
+    s3 = r2_client()
+    for slot in slots:
+        for ext in ("png", "jpg", "jpeg"):
+            key = f"raw/{product_key}/{group}/{slot}.{ext}"
+            try:
+                obj  = s3.get_object(Bucket=bucket, Key=key)
+                data = obj["Body"].read()
+                img  = Image.open(BytesIO(data)).convert("RGBA")
+                return img, slot
+            except Exception:
+                continue
+    raise HTTPException(
+        status_code=404,
+        detail=f"No hero image found for {product_key}/{group} (tried all slots)",
+    )
+
+
+def _scale_to_cover(img: Image.Image, W: int, H: int) -> Image.Image:
+    """Scale image to fill W×H (cover mode) then center-crop."""
+    iw, ih = img.size
+    scale  = max(W / iw, H / ih)
+    new_w  = max(1, int(iw * scale))
+    new_h  = max(1, int(ih * scale))
+    img    = img.resize((new_w, new_h), Image.LANCZOS)
+    left   = (new_w - W) // 2
+    top    = (new_h - H) // 2
+    return img.crop((left, top, left + W, top + H))
+
+
+def _render_p5(
+    hero:      Image.Image,
+    slot_used: str,
+    theme:     str,
+    brand:     str,
+    model:     str,
+    chip1:     str,
+    chip2:     str,
+    badge:     str,
+) -> bytes:
+    """Compose a 1024×1024 P5 In-Hand Trust card and return raw PNG bytes."""
+    W, H = 1024, 1024
+
+    # ── Full-bleed background ─────────────────────────────────────────
+    canvas = _scale_to_cover(hero.convert("RGBA"), W, H)
+    draw   = ImageDraw.Draw(canvas)
+
+    # Always white text — photo bg could be any colour
+    text_color = (255, 255, 255, 255)
+
+    pad     = 48
+    top_pad = 36
+
+    # ── Bottom gradient (ease-in dark) ────────────────────────────────
+    bot_grad  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    bg_draw   = ImageDraw.Draw(bot_grad)
+    bot_h     = int(H * P5_GRAD_BOTTOM_H)
+    for y in range(bot_h):
+        a = int(210 * (y / bot_h) ** 1.6)
+        bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
+    canvas.alpha_composite(bot_grad)
+
+    # ── Top gradient (ease-out dark) ─────────────────────────────────
+    top_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    tg_draw  = ImageDraw.Draw(top_grad)
+    top_h    = int(H * P5_GRAD_TOP_H)
+    for y in range(top_h):
+        a = int(170 * (1 - y / top_h) ** 1.8)
+        tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+    canvas.alpha_composite(top_grad)
+    draw = ImageDraw.Draw(canvas)
+
+    # ── Brand + model (top-left) ──────────────────────────────────────
+    text_max_w = int(W * 0.62) - pad
+
+    brand_text = (brand or "").strip().upper()
+    brand_font, brand_text = fit_text(
+        draw, brand_text, max_w=text_max_w,
+        start_size=40, min_size=24, loader=load_font_regular,
+    )
+    brand_h = text_size(draw, brand_text, brand_font)[1]
+
+    model_text = (model or "").strip().upper()
+    model_font, model_text = fit_text(
+        draw, model_text, max_w=text_max_w,
+        start_size=80, min_size=32, loader=load_font_bold,
+    )
+
+    draw_text_align_left(draw, pad, top_pad,               brand_text, brand_font, text_color)
+    draw_text_align_left(draw, pad, top_pad + brand_h - 4, model_text, model_font, text_color)
+
+    # ── Trust badge (top-right) ────────────────────────────────────────
+    badge_text = (badge or "").strip().upper()
+    if badge_text:
+        bf       = load_font_bold(26)
+        bpx, bpy = 16, 8
+        btw, bth = text_size(draw, badge_text, bf)
+        bw, bh   = btw + bpx * 2, bth + bpy * 2
+        bx1      = W - pad
+        by0      = top_pad + 8
+        bx0      = bx1 - bw
+        by1      = by0 + bh
+        draw_sticker_pill(draw, bx0, by0, bx1, by1, badge_text, bf)
+
+    # ── 2-chip row (bottom, centered) ────────────────────────────────
+    chip_font = load_font_bold(P5_CHIP_SIZE)
+    features  = [(chip1 or "").strip(), (chip2 or "").strip()]
+    features  = [c for c in features if c]
+
+    if features:
+        chip_groups = []
+        for c in features:
+            tw, th = text_size(draw, c, chip_font)
+            chip_groups.append((c, tw, th))
+
+        n_div     = max(0, len(chip_groups) - 1)
+        total_w   = sum(tw for _, tw, _ in chip_groups) + n_div * (CHIP_GAP_X + DIVIDER_WIDTH)
+        chip_row_h = max(th for _, _, th in chip_groups)
+        chip_y    = H - P5_CHIP_BOTTOM - chip_row_h
+        cur_x     = (W - total_w) // 2
+
+        for idx, (c, tw, th) in enumerate(chip_groups):
+            ty = chip_y + (chip_row_h - th) // 2
+            draw_text_align_left(draw, cur_x, ty, c, chip_font, text_color)
+            cur_x += tw
+            if idx < len(chip_groups) - 1:
+                div_x  = cur_x + CHIP_GAP_X // 2
+                div_cy = chip_y + chip_row_h // 2
+                draw.line(
+                    [(div_x, div_cy - 14), (div_x, div_cy + 14)],
+                    fill=(255, 255, 255, 150), width=2,
+                )
+                cur_x += CHIP_GAP_X + DIVIDER_WIDTH
+
+    out = BytesIO()
+    canvas.convert("RGB").save(out, format="PNG")
+    return out.getvalue()
+
+
+@app.get("/render/p5")
+def render_p5(
+    product_key: str = Query(...),
+    group:       str = Query("A"),
+    brand:       str = Query("Daiwa"),
+    model:       str = Query("Procaster LT"),
+    theme:       str = Query("grey"),
+    chip1:       str = Query(""),
+    chip2:       str = Query(""),
+    badge:       str = Query("READY STOCK"),
+):
+    """
+    P5 — In-Hand / Trust card.
+    Full-bleed photo, auto-fallback: P5_INHAND_CUTOUT → P2_ANGLE_CUTOUT
+    → P3_DETAIL_CUTOUT → P1_HERO_CUTOUT.
+    Brand/Model top-left, trust badge top-right, 2 chips bottom-center.
+    """
+    hero, slot_used = _load_p5_hero(product_key, group)
+    png = _render_p5(hero, slot_used, theme, brand, model, chip1, chip2, badge)
     return Response(content=png, media_type="image/png")
