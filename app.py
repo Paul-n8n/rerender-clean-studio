@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01a"
+VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1357,13 +1357,19 @@ P6_DIVIDER_A    = 50     # divider line alpha
 
 def _load_p6_hero(product_key: str, group: str) -> tuple:
     """Try P3_DETAIL_CUTOUT → P2_ANGLE_CUTOUT → P1_HERO_CUTOUT for one key."""
+    bucket = os.environ.get("R2_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
+    s3 = r2_client()
     slots = ["P3_DETAIL_CUTOUT", "P2_ANGLE_CUTOUT", "P1_HERO_CUTOUT"]
     for slot in slots:
         for ext in ("png", "jpg", "jpeg"):
             key = f"raw/{product_key}/{group}/{slot}.{ext}"
             try:
-                obj = s3.get_object(Bucket=R2_BUCKET, Key=key)
-                return Image.open(io.BytesIO(obj["Body"].read())).convert("RGBA"), slot
+                obj  = s3.get_object(Bucket=bucket, Key=key)
+                data = obj["Body"].read()
+                img  = Image.open(BytesIO(data)).convert("RGBA")
+                return img, slot
             except Exception:
                 continue
     raise HTTPException(status_code=404,
