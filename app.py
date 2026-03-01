@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01c"
+VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01d"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1527,7 +1527,7 @@ def _render_p6(
                   fill=(*text_color[:3], 140))
 
     # ── Output ───────────────────────────────────────────────────────
-    out = io.BytesIO()
+    out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)
     return out.getvalue()
 
