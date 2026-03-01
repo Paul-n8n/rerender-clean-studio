@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01b"
+VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01c"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1552,15 +1552,19 @@ def render_p6(
     Shows min and max size variants side-by-side at accurate relative scale
     derived from alpha bounding-box heights. Clamp: 0.55 ≤ ratio ≤ 0.92.
     """
+    import traceback
     min_hero, slot_min = _load_p6_hero(size_min_key, group)
     max_hero, slot_max = _load_p6_hero(size_max_key, group)
-    png = _render_p6(
-        min_hero, max_hero, slot_min, slot_max, theme,
-        brand, model,
-        size_min_label, size_max_label,
-        size_min_weight, size_max_weight,
-        compare_note, badge,
-    )
+    try:
+        png = _render_p6(
+            min_hero, max_hero, slot_min, slot_max, theme,
+            brand, model,
+            size_min_label, size_max_label,
+            size_min_weight, size_max_weight,
+            compare_note, badge,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"P6 render error: {e}\n{traceback.format_exc()}")
     return Response(content=png, media_type="image/png",
                     headers={"X-Used-Slot-Min": slot_min,
                              "X-Used-Slot-Max": slot_max})
