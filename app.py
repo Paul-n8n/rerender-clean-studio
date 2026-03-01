@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01d"
+VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01e"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1344,15 +1344,18 @@ def render_p5(
 # Grid overlay acts as a visual ruler. Auto-fallback per slot.
 # =====================================================================
 
-P6_GRID_SPACING = 50
-P6_GRID_ALPHA   = 20     # ~8 % of 255
-P6_GRID_LW      = 2
-P6_TARGET_H     = 660    # max-reel content height (px)
-P6_CONTENT_TOP  = 140    # y where reel content area starts
-P6_LABEL_TOP    = 880    # y where size labels start
-P6_TAG_PAD_X    = 14
-P6_TAG_PAD_Y    = 7
-P6_DIVIDER_A    = 50     # divider line alpha
+P6_GRID_SPACING    = 50
+P6_GRID_ALPHA      = 20     # ~8 % of 255
+P6_GRID_LW         = 2
+P6_TARGET_H        = 660    # max-reel bbox height target (px)
+P6_CONTENT_TOP     = 140    # y where reel content area starts
+P6_LABEL_TOP       = 880    # y where size labels start
+P6_BASELINE_Y      = 840    # common ground baseline — both reel bottoms land here
+P6_GAP             = 16     # min clearance from reel edge to divider line
+P6_TAG_PAD_X       = 14
+P6_TAG_PAD_Y       = 7
+P6_DIVIDER_A_BACK  = 31     # back-pass divider alpha (≈12 % of 255, drawn before reels)
+P6_DIVIDER_A_FRONT = 71     # front-pass divider alpha (≈28 % of 255, drawn after reels)
 
 
 def _load_p6_hero(product_key: str, group: str) -> tuple:
@@ -1376,10 +1379,16 @@ def _load_p6_hero(product_key: str, group: str) -> tuple:
                         detail=f"No hero found for {product_key}/{group}")
 
 
+def _alpha_bbox(img: Image.Image) -> tuple:
+    """Returns (left, top, right, bottom) of non-transparent area, or full image bounds."""
+    bbox = img.split()[3].getbbox()
+    return bbox if bbox else (0, 0, img.width, img.height)
+
+
 def _alpha_bbox_h(img: Image.Image) -> int:
     """Height (px) of the non-transparent bounding box."""
-    bbox = img.split()[3].getbbox()
-    return (bbox[3] - bbox[1]) if bbox else img.height
+    _, t, _, b = _alpha_bbox(img)
+    return b - t
 
 
 def _draw_grid(canvas: Image.Image, W: int, H: int) -> None:
@@ -1421,48 +1430,75 @@ def _render_p6(
     # ── Grid overlay ──────────────────────────────────────────────────
     _draw_grid(canvas, W, H)
 
-    # ── Auto-scale from alpha bounding-box heights ────────────────────
-    max_bbox_h = _alpha_bbox_h(max_hero)
-    min_bbox_h = _alpha_bbox_h(min_hero)
+    # ── Back-pass divider (drawn before reels at low alpha) ───────────
+    _pre_draw = ImageDraw.Draw(canvas)
+    div_col_back  = (*text_color[:3], P6_DIVIDER_A_BACK)
+    div_col_front = (*text_color[:3], P6_DIVIDER_A_FRONT)
+    _pre_draw.line([(panel_w, P6_CONTENT_TOP + 20), (panel_w, P6_LABEL_TOP - 20)],
+                   fill=div_col_back, width=2)
 
-    # Natural size ratio from real content heights; clamp for visual sanity
+    # ── Auto-scale from alpha bounding-box ────────────────────────────
+    max_ab     = _alpha_bbox(max_hero)   # (left, top, right, bottom) in original
+    min_ab     = _alpha_bbox(min_hero)
+    max_bbox_h = max_ab[3] - max_ab[1]
+    min_bbox_h = min_ab[3] - min_ab[1]
+
+    # Natural size ratio from real bbox heights; clamp for visual sanity
     ratio = (min_bbox_h / max_bbox_h) if max_bbox_h > 0 else 1.0
     ratio = max(0.55, min(0.92, ratio))
 
-    # Scale max reel so its content fills P6_TARGET_H
-    s_max   = P6_TARGET_H / max_bbox_h if max_bbox_h > 0 else P6_TARGET_H / max_hero.height
-    max_rs  = max_hero.resize(
+    # Scale max reel so bbox height = P6_TARGET_H
+    s_max  = P6_TARGET_H / max_bbox_h if max_bbox_h > 0 else 1.0
+    max_rs = max_hero.resize(
         (max(1, int(max_hero.width * s_max)), max(1, int(max_hero.height * s_max))),
         Image.LANCZOS)
+    max_bbox_bottom_px = int(max_ab[3] * s_max)  # y in scaled image where bbox bottom sits
 
-    # Scale min reel so its content fills P6_TARGET_H * ratio
-    min_content_h = int(P6_TARGET_H * ratio)
-    s_min   = min_content_h / min_bbox_h if min_bbox_h > 0 else min_content_h / min_hero.height
-    min_rs  = min_hero.resize(
+    # Scale min reel so bbox height = P6_TARGET_H * ratio
+    min_content_h      = int(P6_TARGET_H * ratio)
+    s_min  = min_content_h / min_bbox_h if min_bbox_h > 0 else 1.0
+    min_rs = min_hero.resize(
         (max(1, int(min_hero.width * s_min)), max(1, int(min_hero.height * s_min))),
         Image.LANCZOS)
+    min_bbox_bottom_px = int(min_ab[3] * s_min)  # y in scaled image where bbox bottom sits
 
-    # ── Place reels (centred in each panel, vertically in content zone) ─
-    content_mid_y = (P6_CONTENT_TOP + P6_LABEL_TOP) // 2
+    # ── Enforce no-cross rule: max reel width = panel_w - 2*P6_GAP ───
+    # Ensures left reel right-edge ≤ divider-16  and  right reel left-edge ≥ divider+16
+    max_reel_w = panel_w - 2 * P6_GAP  # 480 px for 512-wide panels
 
-    # Min reel — left panel
+    if min_rs.width > max_reel_w:
+        shrink             = max_reel_w / min_rs.width
+        min_rs             = min_rs.resize(
+            (max_reel_w, max(1, int(min_rs.height * shrink))), Image.LANCZOS)
+        min_bbox_bottom_px = int(min_bbox_bottom_px * shrink)
+
+    if max_rs.width > max_reel_w:
+        shrink             = max_reel_w / max_rs.width
+        max_rs             = max_rs.resize(
+            (max_reel_w, max(1, int(max_rs.height * shrink))), Image.LANCZOS)
+        max_bbox_bottom_px = int(max_bbox_bottom_px * shrink)
+
+    # ── Place both reels on a common ground baseline ──────────────────
+    # Position image so its alpha-bbox bottom lands exactly at P6_BASELINE_Y
+    min_y = P6_BASELINE_Y - min_bbox_bottom_px
+    max_y = P6_BASELINE_Y - max_bbox_bottom_px
     min_x = (panel_w - min_rs.width) // 2
-    min_y = content_mid_y - min_rs.height // 2
-    draw_radial_glow(canvas, panel_w // 2, content_mid_y)
-    canvas.alpha_composite(min_rs, (max(0, min_x), max(0, min_y)))
-
-    # Max reel — right panel
     max_x = panel_w + (panel_w - max_rs.width) // 2
-    max_y = content_mid_y - max_rs.height // 2
-    draw_radial_glow(canvas, panel_w + panel_w // 2, content_mid_y)
+
+    # Glow centred at approximate mid-height of each reel's visible bbox
+    min_glow_y = P6_BASELINE_Y - min_bbox_bottom_px // 2
+    max_glow_y = P6_BASELINE_Y - max_bbox_bottom_px // 2
+    draw_radial_glow(canvas, panel_w // 2,           min_glow_y)
+    draw_radial_glow(canvas, panel_w + panel_w // 2, max_glow_y)
+
+    canvas.alpha_composite(min_rs, (max(0, min_x), max(0, min_y)))
     canvas.alpha_composite(max_rs, (max(0, max_x), max(0, max_y)))
 
     draw = ImageDraw.Draw(canvas)
 
-    # ── Divider line ──────────────────────────────────────────────────
-    div_col = (*text_color[:3], P6_DIVIDER_A)
+    # ── Front-pass divider (drawn on top of reels at higher alpha) ────
     draw.line([(panel_w, P6_CONTENT_TOP + 20), (panel_w, P6_LABEL_TOP - 20)],
-              fill=div_col, width=1)
+              fill=div_col_front, width=2)
 
     # ── Brand + model (top-left) ──────────────────────────────────────
     text_max_w  = int(W * 0.55) - pad
