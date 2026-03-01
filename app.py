@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5 v2026-02-28h"
+VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1335,3 +1335,226 @@ def render_p5(
     png = _render_p5(hero, slot_used, theme, brand, model, chip1, chip2, badge)
     return Response(content=png, media_type="image/png",
                     headers={"X-Used-Slot": slot_used})
+
+
+# =====================================================================
+# /render/p6 — Size Comparison Card
+# Two panels (left = min size, right = max size) at accurate relative
+# scale derived from alpha bounding-box heights.
+# Grid overlay acts as a visual ruler. Auto-fallback per slot.
+# =====================================================================
+
+P6_GRID_SPACING = 50
+P6_GRID_ALPHA   = 20     # ~8 % of 255
+P6_GRID_LW      = 2
+P6_TARGET_H     = 660    # max-reel content height (px)
+P6_CONTENT_TOP  = 140    # y where reel content area starts
+P6_LABEL_TOP    = 880    # y where size labels start
+P6_TAG_PAD_X    = 14
+P6_TAG_PAD_Y    = 7
+P6_DIVIDER_A    = 50     # divider line alpha
+
+
+def _load_p6_hero(product_key: str, group: str) -> tuple:
+    """Try P3_DETAIL_CUTOUT → P2_ANGLE_CUTOUT → P1_HERO_CUTOUT for one key."""
+    slots = ["P3_DETAIL_CUTOUT", "P2_ANGLE_CUTOUT", "P1_HERO_CUTOUT"]
+    for slot in slots:
+        for ext in ("png", "jpg", "jpeg"):
+            key = f"raw/{product_key}/{group}/{slot}.{ext}"
+            try:
+                obj = s3.get_object(Bucket=R2_BUCKET, Key=key)
+                return Image.open(io.BytesIO(obj["Body"].read())).convert("RGBA"), slot
+            except Exception:
+                continue
+    raise HTTPException(status_code=404,
+                        detail=f"No hero found for {product_key}/{group}")
+
+
+def _alpha_bbox_h(img: Image.Image) -> int:
+    """Height (px) of the non-transparent bounding box."""
+    bbox = img.split()[3].getbbox()
+    return (bbox[3] - bbox[1]) if bbox else img.height
+
+
+def _draw_grid(canvas: Image.Image, W: int, H: int) -> None:
+    """Subtle grid overlay — acts as a visual ruler."""
+    grid = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    gd   = ImageDraw.Draw(grid)
+    for x in range(0, W + 1, P6_GRID_SPACING):
+        gd.line([(x, 0), (x, H)], fill=(200, 200, 200, P6_GRID_ALPHA), width=P6_GRID_LW)
+    for y in range(0, H + 1, P6_GRID_SPACING):
+        gd.line([(0, y), (W, y)], fill=(200, 200, 200, P6_GRID_ALPHA), width=P6_GRID_LW)
+    canvas.alpha_composite(grid)
+
+
+def _render_p6(
+    min_hero:        Image.Image,
+    max_hero:        Image.Image,
+    slot_min:        str,
+    slot_max:        str,
+    theme:           str,
+    brand:           str,
+    model:           str,
+    size_min_label:  str,
+    size_max_label:  str,
+    size_min_weight: str,
+    size_max_weight: str,
+    compare_note:    str,
+    badge:           str,
+) -> bytes:
+    W, H    = 1024, 1024
+    pad     = 48
+    top_pad = 36
+    panel_w = W // 2
+
+    # ── Background ────────────────────────────────────────────────────
+    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+    tc         = get_theme_colors(theme)
+    text_color = tc["text"]
+
+    # ── Grid overlay ──────────────────────────────────────────────────
+    _draw_grid(canvas, W, H)
+
+    # ── Auto-scale from alpha bounding-box heights ────────────────────
+    max_bbox_h = _alpha_bbox_h(max_hero)
+    min_bbox_h = _alpha_bbox_h(min_hero)
+
+    # Natural size ratio from real content heights; clamp for visual sanity
+    ratio = (min_bbox_h / max_bbox_h) if max_bbox_h > 0 else 1.0
+    ratio = max(0.55, min(0.92, ratio))
+
+    # Scale max reel so its content fills P6_TARGET_H
+    s_max   = P6_TARGET_H / max_bbox_h if max_bbox_h > 0 else P6_TARGET_H / max_hero.height
+    max_rs  = max_hero.resize(
+        (max(1, int(max_hero.width * s_max)), max(1, int(max_hero.height * s_max))),
+        Image.LANCZOS)
+
+    # Scale min reel so its content fills P6_TARGET_H * ratio
+    min_content_h = int(P6_TARGET_H * ratio)
+    s_min   = min_content_h / min_bbox_h if min_bbox_h > 0 else min_content_h / min_hero.height
+    min_rs  = min_hero.resize(
+        (max(1, int(min_hero.width * s_min)), max(1, int(min_hero.height * s_min))),
+        Image.LANCZOS)
+
+    # ── Place reels (centred in each panel, vertically in content zone) ─
+    content_mid_y = (P6_CONTENT_TOP + P6_LABEL_TOP) // 2
+
+    # Min reel — left panel
+    min_x = (panel_w - min_rs.width) // 2
+    min_y = content_mid_y - min_rs.height // 2
+    draw_radial_glow(canvas, panel_w // 2, content_mid_y)
+    canvas.alpha_composite(min_rs, (max(0, min_x), max(0, min_y)))
+
+    # Max reel — right panel
+    max_x = panel_w + (panel_w - max_rs.width) // 2
+    max_y = content_mid_y - max_rs.height // 2
+    draw_radial_glow(canvas, panel_w + panel_w // 2, content_mid_y)
+    canvas.alpha_composite(max_rs, (max(0, max_x), max(0, max_y)))
+
+    draw = ImageDraw.Draw(canvas)
+
+    # ── Divider line ──────────────────────────────────────────────────
+    div_col = (*text_color[:3], P6_DIVIDER_A)
+    draw.line([(panel_w, P6_CONTENT_TOP + 20), (panel_w, P6_LABEL_TOP - 20)],
+              fill=div_col, width=1)
+
+    # ── Brand + model (top-left) ──────────────────────────────────────
+    text_max_w  = int(W * 0.55) - pad
+    brand_text  = (brand or "").strip().upper()
+    brand_font, brand_text = fit_text(
+        draw, brand_text, max_w=text_max_w,
+        start_size=40, min_size=24, loader=load_font_regular)
+    brand_h = text_size(draw, brand_text, brand_font)[1]
+
+    model_text  = (model or "").strip().upper()
+    model_font, model_text = fit_text(
+        draw, model_text, max_w=text_max_w,
+        start_size=80, min_size=32, loader=load_font_bold)
+
+    draw_text_align_left(draw, pad, top_pad,               brand_text, brand_font, text_color)
+    draw_text_align_left(draw, pad, top_pad + brand_h - 4, model_text, model_font, text_color)
+
+    # ── SIZE COMPARISON pill (top-right) ──────────────────────────────
+    pill_font = load_font_bold(22)
+    pill_text = "SIZE COMPARISON"
+    pw, ph    = text_size(draw, pill_text, pill_font)
+    pill_x    = W - pad - pw - P6_TAG_PAD_X * 2
+    pill_y    = top_pad + 8
+    pill_rect = [pill_x - P6_TAG_PAD_X, pill_y - P6_TAG_PAD_Y,
+                 pill_x + pw + P6_TAG_PAD_X, pill_y + ph + P6_TAG_PAD_Y]
+    draw.rounded_rectangle(pill_rect, radius=20, outline=text_color[:3], width=2)
+    draw.text((pill_x, pill_y), pill_text, font=pill_font, fill=text_color)
+
+    # ── Size labels (bottom of each panel) ───────────────────────────
+    lbl_y     = P6_LABEL_TOP + 8
+    wt_y      = lbl_y + 60
+    size_font = load_font_bold(52)
+    wt_font   = load_font_regular(28)
+    faded     = (*text_color[:3], 180)
+
+    # Min labels — left panel, centred
+    min_lbl = (size_min_label  or "").strip()
+    min_wt  = (size_min_weight or "").strip()
+    if min_lbl:
+        mlw, _ = text_size(draw, min_lbl, size_font)
+        draw.text(((panel_w - mlw) // 2, lbl_y), min_lbl, font=size_font, fill=text_color)
+    if min_wt:
+        mww, _ = text_size(draw, min_wt, wt_font)
+        draw.text(((panel_w - mww) // 2, wt_y), min_wt, font=wt_font, fill=faded)
+
+    # Max labels — right panel, centred
+    max_lbl = (size_max_label  or "").strip()
+    max_wt  = (size_max_weight or "").strip()
+    if max_lbl:
+        xlw, _ = text_size(draw, max_lbl, size_font)
+        draw.text((panel_w + (panel_w - xlw) // 2, lbl_y), max_lbl, font=size_font, fill=text_color)
+    if max_wt:
+        xww, _ = text_size(draw, max_wt, wt_font)
+        draw.text((panel_w + (panel_w - xww) // 2, wt_y), max_wt, font=wt_font, fill=faded)
+
+    # ── compare_note (bottom-centre) ─────────────────────────────────
+    if compare_note and compare_note.strip():
+        note_font = load_font_regular(24)
+        note_text = compare_note.strip()
+        nw, _     = text_size(draw, note_text, note_font)
+        draw.text(((W - nw) // 2, H - 36), note_text, font=note_font,
+                  fill=(*text_color[:3], 140))
+
+    # ── Output ───────────────────────────────────────────────────────
+    out = io.BytesIO()
+    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
+@app.get("/render/p6")
+def render_p6(
+    size_min_key:    str = Query(...),
+    size_max_key:    str = Query(...),
+    group:           str = Query("A"),
+    brand:           str = Query(""),
+    model:           str = Query(""),
+    theme:           str = Query("grey"),
+    size_min_label:  str = Query(""),
+    size_max_label:  str = Query(""),
+    size_min_weight: str = Query(""),
+    size_max_weight: str = Query(""),
+    compare_note:    str = Query(""),
+    badge:           str = Query(""),
+):
+    """
+    P6 — Size Comparison card.
+    Shows min and max size variants side-by-side at accurate relative scale
+    derived from alpha bounding-box heights. Clamp: 0.55 ≤ ratio ≤ 0.92.
+    """
+    min_hero, slot_min = _load_p6_hero(size_min_key, group)
+    max_hero, slot_max = _load_p6_hero(size_max_key, group)
+    png = _render_p6(
+        min_hero, max_hero, slot_min, slot_max, theme,
+        brand, model,
+        size_min_label, size_max_label,
+        size_min_weight, size_max_weight,
+        compare_note, badge,
+    )
+    return Response(content=png, media_type="image/png",
+                    headers={"X-Used-Slot-Min": slot_min,
+                             "X-Used-Slot-Max": slot_max})
