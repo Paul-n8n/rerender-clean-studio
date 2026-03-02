@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7 v2026-03-01f"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1820,9 +1820,9 @@ def render_p7(
 ):
     """
     P7 — Bundle & Box Proof card.
-    Waterfall: P7_BOX_PHOTO → P7_BOX_CUTOUT → P2_ANGLE_CUTOUT → P3_DETAIL_CUTOUT → P1_HERO_CUTOUT.
-    BOX_PHOTO slot → full-bleed background + left scrim.
-    All other slots → theme background with asset on right panel.
+    Waterfall: P7_BOX_PHOTO -> P7_BOX_CUTOUT -> P2_ANGLE_CUTOUT -> P3_DETAIL_CUTOUT -> P1_HERO_CUTOUT.
+    BOX_PHOTO slot -> full-bleed background + left scrim.
+    All other slots -> theme background with asset on right panel.
     """
     hero, slot_used = _load_p7_hero(product_key, group)
     png = _render_p7(
@@ -1832,3 +1832,191 @@ def render_p7(
     )
     return Response(content=png, media_type="image/png",
                     headers={"X-Used-Slot": slot_used})
+
+
+# ==========================================================================
+# P8 — STORE PROMISE / GUARANTEE CARD
+# ==========================================================================
+
+P8_WATERMARK_ALPHA = 32     # reel ghost opacity (0-255); ~12% visible
+P8_WATERMARK_BLUR  = 8      # GaussianBlur radius for soft ghost effect
+P8_MAX_PROMISES    = 6      # max promise bullet lines before truncation
+P8_HEADER_SIZE     = 88     # starting font size for header (fit_text shrinks if needed)
+
+
+def _load_p8_watermark(product_key: str, group: str) -> tuple:
+    """Optional reel watermark for P8.  Tries P1->P2->P3 cutout slots in R2.
+    Returns (PIL RGBA image, slot_name) or (None, '').  NEVER raises."""
+    try:
+        bucket = os.environ.get("R2_BUCKET")
+        if not bucket:
+            return None, ""
+        s3 = r2_client()
+        for slot in ("P1_HERO_CUTOUT", "P2_ANGLE_CUTOUT", "P3_DETAIL_CUTOUT"):
+            for ext in ("png", "jpg", "jpeg"):
+                key = f"raw/{product_key}/{group}/{slot}.{ext}"
+                try:
+                    obj  = s3.get_object(Bucket=bucket, Key=key)
+                    data = obj["Body"].read()
+                    img  = Image.open(BytesIO(data)).convert("RGBA")
+                    return img, slot
+                except Exception:
+                    continue
+        return None, ""
+    except Exception:
+        return None, ""
+
+
+def _parse_promise_lines(raw: str) -> list:
+    """Split pipe-separated promise string; cap at P8_MAX_PROMISES items."""
+    return [i.strip() for i in raw.split("|") if i.strip()][:P8_MAX_PROMISES]
+
+
+def _render_p8(
+    watermark_img: Optional[Image.Image],
+    slot_used:     str,
+    theme:         str,
+    brand:         str,
+    model:         str,
+    promise_lines: str,
+    small_print:   str,
+    badge:         str,
+) -> bytes:
+    """Compose a 1024x1024 P8 Store Promise card and return raw PNG bytes.
+
+    Layout:
+      - Theme background + optional radial glow
+      - Ghost reel watermark (right-centre, blurred, ~12% alpha) if R2 asset exists
+      - Top-left: brand + model
+      - Header: SHOP GUARANTEE (or badge text) in large bold + gold accent line
+      - Promise bullets with checkmark prefix (bold, uppercase)
+      - Optional small_print at bottom-left
+    """
+    W, H       = 1024, 1024
+    pad        = 56
+    tc         = get_theme_colors(theme)
+    text_color = tc["text"]
+
+    # ── Background ────────────────────────────────────────────────────
+    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+
+    # Radial glow — right-side depth
+    draw_radial_glow(canvas, W * 2 // 3, H // 2)
+
+    # ── Ghost reel watermark ──────────────────────────────────────────
+    if watermark_img is not None:
+        # Scale watermark to 75% of canvas height
+        target_h  = int(H * 0.75)
+        wm_scale  = target_h / watermark_img.height
+        wm_w      = max(1, int(watermark_img.width  * wm_scale))
+        wm_h      = target_h
+        wm = watermark_img.resize((wm_w, wm_h), Image.LANCZOS)
+
+        # Soften for ghost effect
+        wm = wm.filter(ImageFilter.GaussianBlur(radius=P8_WATERMARK_BLUR))
+
+        # Reduce alpha channel uniformly
+        r_ch, g_ch, b_ch, a_ch = wm.split()
+        a_ch = a_ch.point(lambda p: int(p * P8_WATERMARK_ALPHA / 255))
+        wm   = Image.merge("RGBA", (r_ch, g_ch, b_ch, a_ch))
+
+        # Centre watermark at 65% of canvas width
+        wx = int(W * 0.65) - wm_w // 2
+        wy = (H - wm_h) // 2
+
+        # Pre-clip left/top overflow so alpha_composite stays in-bounds
+        if wx < 0:
+            wm = wm.crop((-wx, 0, wm_w, wm_h))
+            wx = 0
+        if wy < 0:
+            wm = wm.crop((0, -wy, wm.width, wm_h))
+            wy = 0
+
+        canvas.alpha_composite(wm, (wx, wy))
+
+    draw = ImageDraw.Draw(canvas)
+    y    = pad
+
+    # ── Brand ─────────────────────────────────────────────────────────
+    brand_text = (brand or "").strip().upper()
+    if brand_text:
+        b_font = load_font_regular(30)
+        draw_text_align_left(draw, pad, y, brand_text, b_font,
+                             (*text_color[:3], 180))
+        y += text_size(draw, brand_text, b_font)[1] + 4
+
+    # ── Model ─────────────────────────────────────────────────────────
+    model_text = (model or "").strip().upper()
+    if model_text:
+        m_font, model_text = fit_text(
+            draw, model_text, max_w=W - pad * 2,
+            start_size=60, min_size=24, loader=load_font_bold)
+        draw_text_align_left(draw, pad, y, model_text, m_font, text_color)
+        y += text_size(draw, model_text, m_font)[1] + 20
+    elif brand_text:
+        y += 12
+
+    y += 20  # breathing room before header
+
+    # ── Header ("SHOP GUARANTEE" or badge) ────────────────────────────
+    header_raw  = (badge.strip() if badge.strip() else "SHOP GUARANTEE").upper()
+    h_font, header_text = fit_text(
+        draw, header_raw, max_w=W - pad * 2,
+        start_size=P8_HEADER_SIZE, min_size=40, loader=load_font_bold)
+    draw_text_align_left(draw, pad, y, header_text, h_font, text_color)
+    y += text_size(draw, header_text, h_font)[1] + 14
+
+    # Gold accent line beneath header
+    draw.line([(pad, y), (pad + 140, y)],
+              fill=STICKER_FILL[:3] + (210,), width=4)
+    y += 28
+
+    # ── Promise bullets ────────────────────────────────────────────────
+    items  = _parse_promise_lines(promise_lines)
+    p_font = load_font_bold(32)
+    p_h    = text_size(draw, "Ag", p_font)[1]
+    for item in items:
+        draw.text((pad, y), "\u2713  " + item.upper(),
+                  font=p_font, fill=text_color)
+        y += p_h + 14
+
+    # ── Small print ───────────────────────────────────────────────────
+    if small_print and small_print.strip():
+        sp_font = load_font_regular(18)
+        sp_text = small_print.strip()
+        _, sp_h = text_size(draw, sp_text, sp_font)
+        draw.text((pad, H - pad - sp_h), sp_text,
+                  font=sp_font, fill=(*text_color[:3], 100))
+
+    # ── Output ────────────────────────────────────────────────────────
+    out = BytesIO()
+    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
+@app.get("/render/p8")
+def render_p8(
+    product_key:   str = Query(...),
+    group:         str = Query("A"),
+    brand:         str = Query(""),
+    model:         str = Query(""),
+    theme:         str = Query("grey"),
+    promise_lines: str = Query(
+        "READY STOCK|100% ORIGINAL|WARRANTY SUPPORT|SHIPS IN 24H|SECURE CHECKOUT"),
+    small_print:   str = Query(""),
+    badge:         str = Query(""),
+):
+    """
+    P8 -- Store Promise / Guarantee card.
+    Faint reel watermark (right-centre) from R2 if available:
+      P1_HERO_CUTOUT -> P2_ANGLE_CUTOUT -> P3_DETAIL_CUTOUT.
+    Promise bullets with checkmark prefix.  No mandatory hero image.
+    """
+    wm_img, slot_used = _load_p8_watermark(product_key, group)
+    png = _render_p8(
+        wm_img, slot_used, theme,
+        brand, model,
+        promise_lines, small_print, badge,
+    )
+    return Response(content=png, media_type="image/png",
+                    headers={"X-Used-Slot": slot_used or "none"})
