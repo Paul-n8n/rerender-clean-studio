@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02f"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02g"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1992,11 +1992,24 @@ def _render_p8(
 
     y += gap // 2   # half-gap indent before first bullet
 
-    # Gold \u2022 bullet (font-safe, STICKER_FILL colour) + theme-coloured text
+    # Gold ☒ checkbox drawn with PIL (font-independent) + theme-coloured text
+    cb    = int(p_h * 0.62)   # checkbox size proportional to line height
+    ins   = max(5, cb // 5)   # inset for the X strokes
+    cb_lw = 2                  # line width for box + X
     for item in items:
-        draw.text((pad, y), "\u2022", font=p_font,
-                  fill=STICKER_FILL[:3] + (255,))
-        draw.text((pad + 44, y), item.upper(), font=p_font, fill=text_color)
+        cb_x = pad
+        cb_y = y + (p_h - cb) // 2   # vertically centred on text line
+        # Outer box
+        draw.rectangle([cb_x, cb_y, cb_x + cb, cb_y + cb],
+                       outline=STICKER_FILL[:3] + (255,), width=cb_lw)
+        # X strokes inside box
+        draw.line([(cb_x + ins, cb_y + ins),
+                   (cb_x + cb - ins, cb_y + cb - ins)],
+                  fill=STICKER_FILL[:3] + (255,), width=cb_lw)
+        draw.line([(cb_x + cb - ins, cb_y + ins),
+                   (cb_x + ins, cb_y + cb - ins)],
+                  fill=STICKER_FILL[:3] + (255,), width=cb_lw)
+        draw.text((pad + cb + 14, y), item.upper(), font=p_font, fill=text_color)
         y += p_h + gap
 
     # ── Small print ───────────────────────────────────────────────────
