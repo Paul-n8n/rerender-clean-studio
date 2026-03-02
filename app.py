@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02e"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02f"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1970,21 +1970,34 @@ def _render_p8(
         draw, header_raw, max_w=W - pad * 2,
         start_size=P8_HEADER_SIZE, min_size=40, loader=load_font_bold)
     draw_text_align_left(draw, pad, y, header_text, h_font, text_color)
-    y += text_size(draw, header_text, h_font)[1] + 14
+    # Use bbox[3] (actual bottom pixel) not bbox[3]-bbox[1] (height) to avoid
+    # the gold-line-through-text bug when top bearing (bbox[1]) > 0 for large fonts
+    y += draw.textbbox((0, 0), header_text, font=h_font)[3] + 18
 
     # Gold accent line beneath header
     draw.line([(pad, y), (pad + 140, y)],
               fill=STICKER_FILL[:3] + (210,), width=4)
-    y += 28
+    y += 32
 
     # ── Promise bullets ────────────────────────────────────────────────
     items  = _parse_promise_lines(promise_lines)
-    p_font = load_font_bold(32)
+    p_font = load_font_bold(44)
     p_h    = text_size(draw, "Ag", p_font)[1]
+
+    # Distribute bullets evenly in remaining space so card never looks blank
+    sp_reserve = 48 if (small_print and small_print.strip()) else 0
+    avail_h    = (H - pad - sp_reserve) - y
+    n          = max(1, len(items))
+    gap        = max(24, min(72, (avail_h - n * p_h) // (n + 1)))
+
+    y += gap // 2   # half-gap indent before first bullet
+
+    # Gold \u2022 bullet (font-safe, STICKER_FILL colour) + theme-coloured text
     for item in items:
-        draw.text((pad, y), "\u2713  " + item.upper(),
-                  font=p_font, fill=text_color)
-        y += p_h + 14
+        draw.text((pad, y), "\u2022", font=p_font,
+                  fill=STICKER_FILL[:3] + (255,))
+        draw.text((pad + 44, y), item.upper(), font=p_font, fill=text_color)
+        y += p_h + gap
 
     # ── Small print ───────────────────────────────────────────────────
     if small_print and small_print.strip():
