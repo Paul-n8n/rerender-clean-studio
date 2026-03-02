@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02b"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02c"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1610,12 +1610,12 @@ def render_p6(
 # P7 — Bundle & Box Proof
 # =====================================================================
 
-P7_LEFT_W           = 480    # left column / right panel boundary (cutout mode)
-P7_BADGE_PAD_X      = 12
-P7_BADGE_PAD_Y      = 6
-P7_GRAD_START       = 500    # y where bottom gradient starts (photo mode)
-P7_MAX_ITEMS        = 5      # max bundle bullets before "+ N more"
-P7_REEL_SCALE_BOOST = 1.25   # scale reel 25% larger than tight-fit for presence
+P7_LEFT_W            = 480    # left column / right panel boundary (cutout mode)
+P7_BADGE_PAD_X       = 12
+P7_BADGE_PAD_Y       = 6
+P7_GRAD_START        = 500    # y where bottom gradient starts (photo mode)
+P7_MAX_ITEMS         = 5      # max bundle bullets before "+ N more"
+P7_REEL_HEIGHT_RATIO = 0.70   # reel fills 70% of card height; width unconstrained (PIL clips)
 
 
 def _load_p7_hero(product_key: str, group: str) -> tuple:
@@ -1702,16 +1702,16 @@ def _render_p7(
         # Radial glow on right side
         draw_radial_glow(canvas, P7_LEFT_W + (W - P7_LEFT_W) // 2, H // 2)
 
-        # Scale-to-fit hero in right panel (+25% boost for visual presence)
-        right_w  = W - P7_LEFT_W
-        target_w = right_w - pad
-        target_h = H - pad * 2
-        scale    = min(target_w / hero.width, target_h / hero.height) * P7_REEL_SCALE_BOOST
-        rw = max(1, min(right_w, int(hero.width  * scale)))   # clamp to panel width
-        rh = max(1, min(H,       int(hero.height * scale)))   # clamp to canvas height
-        hero_rs = hero.resize((rw, rh), Image.LANCZOS)
-        hx = P7_LEFT_W + (right_w - rw) // 2
-        hy = max(0, (H - rh) // 2 - 40)   # nudge 40px above centre to reduce dead space
+        # Scale reel to 70% of card height; centre at 65% of canvas width.
+        # Width is intentionally unconstrained — PIL clips any right-side overflow.
+        # This approach avoids the width-clamp trap that makes boost factors ineffective.
+        target_h = int(H * P7_REEL_HEIGHT_RATIO)           # 717 px @ 1024
+        scale    = target_h / hero.height
+        rw = max(1, int(hero.width  * scale))
+        rh = target_h
+        hero_rs  = hero.resize((rw, rh), Image.LANCZOS)
+        hx = int(W * 0.65) - rw // 2                       # centre reel at 65% of canvas
+        hy = max(0, (H - rh) // 2 - 40)                    # 40px above vertical centre
         canvas.alpha_composite(hero_rs, (max(0, hx), max(0, hy)))
 
     draw = ImageDraw.Draw(canvas)
@@ -1730,8 +1730,8 @@ def _render_p7(
         draw.rounded_rectangle(pill_rect, radius=12,
                                 fill=STICKER_FILL[:3] + (220,),
                                 outline=STICKER_OUTLINE[:3], width=1)
-        draw.text((bx + P7_BADGE_PAD_X, by + P7_BADGE_PAD_Y),
-                  btxt, font=badge_font, fill=STICKER_TEXT)
+        draw.text((bx + pill_w // 2, by + pill_h // 2),
+                  btxt, font=badge_font, fill=STICKER_TEXT, anchor='mm')
         bx -= 8   # gap between pills
 
     # ── Brand + model ─────────────────────────────────────────────────
