@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6 v2026-03-01e"
+VERSION = "P1+P2+P3+P4+P5+P6+P7 v2026-03-01f"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1604,3 +1604,231 @@ def render_p6(
     return Response(content=png, media_type="image/png",
                     headers={"X-Used-Slot-Min": slot_min,
                              "X-Used-Slot-Max": slot_max})
+
+
+# =====================================================================
+# P7 — Bundle & Box Proof
+# =====================================================================
+
+P7_LEFT_W       = 480    # left column / right panel boundary (cutout mode)
+P7_BADGE_PAD_X  = 12
+P7_BADGE_PAD_Y  = 6
+P7_GRAD_START   = 500    # y where bottom gradient starts (photo mode)
+P7_MAX_ITEMS    = 5      # max bundle bullets before "+ N more"
+
+
+def _load_p7_hero(product_key: str, group: str) -> tuple:
+    """Waterfall: P7_BOX_PHOTO → P7_BOX_CUTOUT → P2_ANGLE_CUTOUT → P3_DETAIL_CUTOUT → P1_HERO_CUTOUT."""
+    bucket = os.environ.get("R2_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
+    s3 = r2_client()
+    slots = ["P7_BOX_PHOTO", "P7_BOX_CUTOUT",
+             "P2_ANGLE_CUTOUT", "P3_DETAIL_CUTOUT", "P1_HERO_CUTOUT"]
+    for slot in slots:
+        for ext in ("png", "jpg", "jpeg"):
+            key = f"raw/{product_key}/{group}/{slot}.{ext}"
+            try:
+                obj  = s3.get_object(Bucket=bucket, Key=key)
+                data = obj["Body"].read()
+                img  = Image.open(BytesIO(data)).convert("RGBA")
+                return img, slot
+            except Exception:
+                continue
+    raise HTTPException(status_code=404,
+                        detail=f"No hero found for {product_key}/{group}")
+
+
+def _parse_bundle_items(raw: str) -> list:
+    """Split pipe-separated bundle string, cap at P7_MAX_ITEMS with overflow line."""
+    items = [i.strip() for i in raw.split("|") if i.strip()]
+    if len(items) > P7_MAX_ITEMS:
+        extra = len(items) - (P7_MAX_ITEMS - 1)
+        items = items[: P7_MAX_ITEMS - 1] + [f"+ {extra} more"]
+    return items
+
+
+def _render_p7(
+    hero:           Image.Image,
+    slot_used:      str,
+    theme:          str,
+    brand:          str,
+    model:          str,
+    bundle_items:   str,
+    warranty_type:  str,
+    trust_badges:   str,
+    packaging_note: str,
+    badge:          str,
+) -> bytes:
+    W, H     = 1024, 1024
+    pad      = 48
+    top_pad  = 36
+    is_photo = (slot_used == "P7_BOX_PHOTO")
+
+    # ── Background ────────────────────────────────────────────────────
+    if is_photo:
+        # Full-bleed: scale-to-cover, center crop
+        scale = max(W / hero.width, H / hero.height)
+        rw    = max(1, int(hero.width  * scale))
+        rh    = max(1, int(hero.height * scale))
+        bg    = hero.resize((rw, rh), Image.LANCZOS)
+        ox    = (rw - W) // 2
+        oy    = (rh - H) // 2
+        canvas = bg.crop((ox, oy, ox + W, oy + H)).copy()
+        text_color = (255, 255, 255, 255)
+
+        # Left scrim — dark panel so white text stays readable
+        scrim = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        ImageDraw.Draw(scrim).rectangle(
+            [0, 0, P7_LEFT_W + 120, H], fill=(0, 0, 0, 150))
+        canvas.alpha_composite(scrim)
+
+        # Bottom gradient — extra depth under bundle items
+        grad_h = H - P7_GRAD_START
+        grad   = Image.new("RGBA", (W, grad_h), (0, 0, 0, 0))
+        gd     = ImageDraw.Draw(grad)
+        for y in range(grad_h):
+            a = int(80 * y / grad_h)
+            gd.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+        canvas.alpha_composite(grad, (0, P7_GRAD_START))
+
+    else:
+        # Theme background
+        canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+        tc         = get_theme_colors(theme)
+        text_color = tc["text"]
+
+        # Radial glow on right side
+        draw_radial_glow(canvas, P7_LEFT_W + (W - P7_LEFT_W) // 2, H // 2)
+
+        # Scale-to-fit hero in right panel
+        right_w  = W - P7_LEFT_W
+        target_w = right_w - pad
+        target_h = H - pad * 2
+        scale    = min(target_w / hero.width, target_h / hero.height)
+        rw = max(1, int(hero.width  * scale))
+        rh = max(1, int(hero.height * scale))
+        hero_rs = hero.resize((rw, rh), Image.LANCZOS)
+        hx = P7_LEFT_W + (right_w - rw) // 2
+        hy = (H - rh) // 2
+        canvas.alpha_composite(hero_rs, (max(0, hx), max(0, hy)))
+
+    draw = ImageDraw.Draw(canvas)
+
+    # ── Trust badge pills (top-right, max 2) ─────────────────────────
+    badge_list = [b.strip() for b in trust_badges.split("|") if b.strip()][:2]
+    badge_font = load_font_bold(18)
+    bx = W - pad
+    by = top_pad
+    for btxt in reversed(badge_list):
+        bw, bh = text_size(draw, btxt, badge_font)
+        pill_w = bw + P7_BADGE_PAD_X * 2
+        pill_h = bh + P7_BADGE_PAD_Y * 2
+        bx    -= pill_w
+        pill_rect = [bx, by, bx + pill_w, by + pill_h]
+        draw.rounded_rectangle(pill_rect, radius=12,
+                                fill=STICKER_FILL[:3] + (220,),
+                                outline=STICKER_OUTLINE[:3], width=1)
+        draw.text((bx + P7_BADGE_PAD_X, by + P7_BADGE_PAD_Y),
+                  btxt, font=badge_font, fill=STICKER_TEXT)
+        bx -= 8   # gap between pills
+
+    # ── Brand + model ─────────────────────────────────────────────────
+    text_max_w = P7_LEFT_W - pad * 2
+    brand_text = (brand or "").strip().upper()
+    brand_font, brand_text = fit_text(
+        draw, brand_text, max_w=text_max_w,
+        start_size=36, min_size=22, loader=load_font_regular)
+    brand_h = text_size(draw, brand_text, brand_font)[1]
+
+    model_text = (model or "").strip().upper()
+    model_font, model_text = fit_text(
+        draw, model_text, max_w=text_max_w,
+        start_size=72, min_size=28, loader=load_font_bold)
+    model_h = text_size(draw, model_text, model_font)[1]
+
+    y = top_pad
+    draw_text_align_left(draw, pad, y, brand_text, brand_font, text_color)
+    y += brand_h + 2
+    draw_text_align_left(draw, pad, y, model_text, model_font, text_color)
+    y += model_h + 32
+
+    # ── "WHAT'S IN THE BOX" header ────────────────────────────────────
+    witb_font = load_font_bold(20)
+    witb_text = "WHAT'S IN THE BOX"
+    witb_h    = text_size(draw, witb_text, witb_font)[1]
+    draw.text((pad, y), witb_text, font=witb_font,
+              fill=(*text_color[:3], 200))
+    y += witb_h + 8
+
+    # Thin rule under header
+    draw.line([(pad, y), (P7_LEFT_W - pad, y)],
+              fill=(*text_color[:3], 80), width=1)
+    y += 12
+
+    # ── Bundle item bullets ───────────────────────────────────────────
+    items     = _parse_bundle_items(bundle_items)
+    item_font = load_font_regular(26)
+    item_h    = text_size(draw, "Ag", item_font)[1]
+    for item in items:
+        draw.text((pad, y), "\u2022  " + item, font=item_font, fill=text_color)
+        y += item_h + 6
+
+    y += 10
+
+    # ── Warranty type ─────────────────────────────────────────────────
+    if warranty_type and warranty_type.strip():
+        wt_font = load_font_regular(22)
+        wt_text = warranty_type.strip()
+        draw.text((pad, y), wt_text, font=wt_font,
+                  fill=(*text_color[:3], 170))
+        y += text_size(draw, wt_text, wt_font)[1] + 4
+
+    # ── Packaging note ────────────────────────────────────────────────
+    if packaging_note and packaging_note.strip():
+        pn_font = load_font_regular(18)
+        draw.text((pad, y), packaging_note.strip(), font=pn_font,
+                  fill=(*text_color[:3], 120))
+
+    # ── "ACTUAL ITEM" watermark for non-box fallback slots ───────────
+    if not is_photo and slot_used not in ("P7_BOX_PHOTO", "P7_BOX_CUTOUT"):
+        ai_font = load_font_regular(16)
+        ai_text = "ACTUAL ITEM"
+        aiw, aih = text_size(draw, ai_text, ai_font)
+        draw.text(
+            (P7_LEFT_W + (W - P7_LEFT_W - aiw) // 2, H - pad - aih),
+            ai_text, font=ai_font, fill=(*text_color[:3], 80))
+
+    # ── Output ────────────────────────────────────────────────────────
+    out = BytesIO()
+    canvas.convert("RGB").save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
+@app.get("/render/p7")
+def render_p7(
+    product_key:    str = Query(...),
+    group:          str = Query("A"),
+    brand:          str = Query(""),
+    model:          str = Query(""),
+    theme:          str = Query("grey"),
+    bundle_items:   str = Query(""),
+    warranty_type:  str = Query(""),
+    trust_badges:   str = Query(""),
+    packaging_note: str = Query(""),
+    badge:          str = Query(""),
+):
+    """
+    P7 — Bundle & Box Proof card.
+    Waterfall: P7_BOX_PHOTO → P7_BOX_CUTOUT → P2_ANGLE_CUTOUT → P3_DETAIL_CUTOUT → P1_HERO_CUTOUT.
+    BOX_PHOTO slot → full-bleed background + left scrim.
+    All other slots → theme background with asset on right panel.
+    """
+    hero, slot_used = _load_p7_hero(product_key, group)
+    png = _render_p7(
+        hero, slot_used, theme,
+        brand, model,
+        bundle_items, warranty_type, trust_badges, packaging_note, badge,
+    )
+    return Response(content=png, media_type="image/png",
+                    headers={"X-Used-Slot": slot_used})
