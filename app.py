@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02a"  # redeploy
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1610,11 +1610,12 @@ def render_p6(
 # P7 — Bundle & Box Proof
 # =====================================================================
 
-P7_LEFT_W       = 480    # left column / right panel boundary (cutout mode)
-P7_BADGE_PAD_X  = 12
-P7_BADGE_PAD_Y  = 6
-P7_GRAD_START   = 500    # y where bottom gradient starts (photo mode)
-P7_MAX_ITEMS    = 5      # max bundle bullets before "+ N more"
+P7_LEFT_W           = 480    # left column / right panel boundary (cutout mode)
+P7_BADGE_PAD_X      = 12
+P7_BADGE_PAD_Y      = 6
+P7_GRAD_START       = 500    # y where bottom gradient starts (photo mode)
+P7_MAX_ITEMS        = 5      # max bundle bullets before "+ N more"
+P7_REEL_SCALE_BOOST = 1.25   # scale reel 25% larger than tight-fit for presence
 
 
 def _load_p7_hero(product_key: str, group: str) -> tuple:
@@ -1701,16 +1702,16 @@ def _render_p7(
         # Radial glow on right side
         draw_radial_glow(canvas, P7_LEFT_W + (W - P7_LEFT_W) // 2, H // 2)
 
-        # Scale-to-fit hero in right panel
+        # Scale-to-fit hero in right panel (+25% boost for visual presence)
         right_w  = W - P7_LEFT_W
         target_w = right_w - pad
         target_h = H - pad * 2
-        scale    = min(target_w / hero.width, target_h / hero.height)
-        rw = max(1, int(hero.width  * scale))
-        rh = max(1, int(hero.height * scale))
+        scale    = min(target_w / hero.width, target_h / hero.height) * P7_REEL_SCALE_BOOST
+        rw = max(1, min(right_w, int(hero.width  * scale)))   # clamp to panel width
+        rh = max(1, min(H,       int(hero.height * scale)))   # clamp to canvas height
         hero_rs = hero.resize((rw, rh), Image.LANCZOS)
         hx = P7_LEFT_W + (right_w - rw) // 2
-        hy = (H - rh) // 2
+        hy = max(0, (H - rh) // 2 - 40)   # nudge 40px above centre to reduce dead space
         canvas.alpha_composite(hero_rs, (max(0, hx), max(0, hy)))
 
     draw = ImageDraw.Draw(canvas)
@@ -1754,7 +1755,7 @@ def _render_p7(
     y += model_h + 32
 
     # ── "WHAT'S IN THE BOX" header ────────────────────────────────────
-    witb_font = load_font_bold(20)
+    witb_font = load_font_bold(22)
     witb_text = "WHAT'S IN THE BOX"
     witb_h    = text_size(draw, witb_text, witb_font)[1]
     draw.text((pad, y), witb_text, font=witb_font,
@@ -1768,21 +1769,21 @@ def _render_p7(
 
     # ── Bundle item bullets ───────────────────────────────────────────
     items     = _parse_bundle_items(bundle_items)
-    item_font = load_font_regular(26)
+    item_font = load_font_regular(30)    # +15% for Shopee thumbnail legibility
     item_h    = text_size(draw, "Ag", item_font)[1]
     for item in items:
         draw.text((pad, y), "\u2022  " + item, font=item_font, fill=text_color)
-        y += item_h + 6
+        y += item_h + 10                # +4px breathing room between bullets
 
     y += 10
 
     # ── Warranty type ─────────────────────────────────────────────────
     if warranty_type and warranty_type.strip():
-        wt_font = load_font_regular(22)
+        wt_font = load_font_bold(26)    # bolder + larger — trust signal, not footnote
         wt_text = warranty_type.strip()
         draw.text((pad, y), wt_text, font=wt_font,
-                  fill=(*text_color[:3], 170))
-        y += text_size(draw, wt_text, wt_font)[1] + 4
+                  fill=(*text_color[:3], 210))
+        y += text_size(draw, wt_text, wt_font)[1] + 8
 
     # ── Packaging note ────────────────────────────────────────────────
     if packaging_note and packaging_note.strip():
