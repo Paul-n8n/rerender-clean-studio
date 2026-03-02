@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02d"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02e"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1615,7 +1615,7 @@ P7_BADGE_PAD_X       = 12
 P7_BADGE_PAD_Y       = 6
 P7_GRAD_START        = 500    # y where bottom gradient starts (photo mode)
 P7_MAX_ITEMS         = 5      # max bundle bullets before "+ N more"
-P7_REEL_HEIGHT_RATIO = 0.82   # reel fills 82% of card height (measured after alpha-crop)
+P7_REEL_HEIGHT_RATIO = 0.72   # reel fills 72% of card height (measured after alpha-crop)
 
 
 def _load_p7_hero(product_key: str, group: str) -> tuple:
