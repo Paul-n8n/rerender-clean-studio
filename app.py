@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02c"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02d"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1615,7 +1615,7 @@ P7_BADGE_PAD_X       = 12
 P7_BADGE_PAD_Y       = 6
 P7_GRAD_START        = 500    # y where bottom gradient starts (photo mode)
 P7_MAX_ITEMS         = 5      # max bundle bullets before "+ N more"
-P7_REEL_HEIGHT_RATIO = 0.70   # reel fills 70% of card height; width unconstrained (PIL clips)
+P7_REEL_HEIGHT_RATIO = 0.82   # reel fills 82% of card height (measured after alpha-crop)
 
 
 def _load_p7_hero(product_key: str, group: str) -> tuple:
@@ -1702,10 +1702,15 @@ def _render_p7(
         # Radial glow on right side
         draw_radial_glow(canvas, P7_LEFT_W + (W - P7_LEFT_W) // 2, H // 2)
 
-        # Scale reel to 70% of card height; centre at 65% of canvas width.
+        # Crop transparent padding so ratio measures the actual reel body, not whitespace.
+        if hero.mode == 'RGBA':
+            bbox = hero.split()[3].getbbox()   # alpha channel bounding box
+            if bbox:
+                hero = hero.crop(bbox)
+
+        # Scale reel to 82% of card height; centre at 65% of canvas width.
         # Width is intentionally unconstrained — PIL clips any right-side overflow.
-        # This approach avoids the width-clamp trap that makes boost factors ineffective.
-        target_h = int(H * P7_REEL_HEIGHT_RATIO)           # 717 px @ 1024
+        target_h = int(H * P7_REEL_HEIGHT_RATIO)           # 839 px @ 1024
         scale    = target_h / hero.height
         rw = max(1, int(hero.width  * scale))
         rh = target_h
