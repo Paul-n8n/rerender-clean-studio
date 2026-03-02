@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02g"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02h"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1992,23 +1992,27 @@ def _render_p8(
 
     y += gap // 2   # half-gap indent before first bullet
 
-    # Gold ☒ checkbox drawn with PIL (font-independent) + theme-coloured text
+    # ☒ checkbox drawn with PIL (font-independent), black, vertically centred
     cb    = int(p_h * 0.62)   # checkbox size proportional to line height
     ins   = max(5, cb // 5)   # inset for the X strokes
     cb_lw = 2                  # line width for box + X
+    # Measure actual top bearing so checkbox aligns with visible text, not bbox origin
+    _tb   = draw.textbbox((0, 0), "Ag", font=p_font)
+    cb_fill = (*text_color[:3], 255)   # black (matches theme text colour)
     for item in items:
         cb_x = pad
-        cb_y = y + (p_h - cb) // 2   # vertically centred on text line
+        # Centre checkbox on visible text: offset by top bearing + centre within text height
+        cb_y = y + _tb[1] + (_tb[3] - _tb[1] - cb) // 2
         # Outer box
         draw.rectangle([cb_x, cb_y, cb_x + cb, cb_y + cb],
-                       outline=STICKER_FILL[:3] + (255,), width=cb_lw)
+                       outline=cb_fill, width=cb_lw)
         # X strokes inside box
         draw.line([(cb_x + ins, cb_y + ins),
                    (cb_x + cb - ins, cb_y + cb - ins)],
-                  fill=STICKER_FILL[:3] + (255,), width=cb_lw)
+                  fill=cb_fill, width=cb_lw)
         draw.line([(cb_x + cb - ins, cb_y + ins),
                    (cb_x + ins, cb_y + cb - ins)],
-                  fill=STICKER_FILL[:3] + (255,), width=cb_lw)
+                  fill=cb_fill, width=cb_lw)
         draw.text((pad + cb + 14, y), item.upper(), font=p_font, fill=text_color)
         y += p_h + gap
 
