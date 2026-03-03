@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02h"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-02i"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1911,8 +1911,8 @@ def _render_p8(
 
     # ── Ghost reel watermark ──────────────────────────────────────────
     if watermark_img is not None:
-        # Scale watermark to 75% of canvas height
-        target_h  = int(H * 0.75)
+        # Scale watermark to 88% of canvas height
+        target_h  = int(H * 0.88)
         wm_scale  = target_h / watermark_img.height
         wm_w      = max(1, int(watermark_img.width  * wm_scale))
         wm_h      = target_h
