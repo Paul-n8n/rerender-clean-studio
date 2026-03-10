@@ -501,29 +501,18 @@ def _render_product(
     num_dividers   = max(0, len(chip_groups) - 1)
     total_chips_w  = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
     total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
-    needed_below   = CHIP_TOP_GAP + chip_row_h + CTA_GAP_Y + cta_h + BOTTOM_SAFE
+    # --- Compute model text bottom for chip placement ---
+    model_h = text_size(draw, model_text, model_font)[1]
+    model_bottom = model_y + model_h
 
-    hero_w, hero_h = hero.size
-    TARGET_H_RATIO = 0.62
-    target_h       = int(H * TARGET_H_RATIO)
-    scale          = target_h / hero_h
-    new_w          = max(1, int(hero_w * scale))
-    new_h          = max(1, int(hero_h * scale))
-    hero_rs        = hero.resize((new_w, new_h), resample=Image.LANCZOS)
+    # --- needed_below: only CTA (chips moved above hero) ---
+    needed_below = CTA_GAP_Y + cta_h + BOTTOM_SAFE
 
-    px = (W - new_w) // 2
-    px = max(px, pad)
-    px = min(px, W - new_w - 10)
-    py = int(H * 0.22)
-    max_hero_bottom = H - needed_below
-    if py + new_h > max_hero_bottom:
-        py = max_hero_bottom - new_h
-        py = max(py, top_pad + 20)
-    hero_bottom = py + new_h
-
+    # --- Draw header text ---
     draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, text_color)
     draw_text_align_left(draw, header_left, model_y,    model_text, model_font, text_color)
 
+    # --- Draw badge (chip3 / size) at top-right ---
     size_text = (chip3 or "").strip()
     if size_text:
         badge_font = load_font_bold(38)
@@ -536,18 +525,10 @@ def _render_product(
         by1        = by0 + bh
         draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
-    glow_cx = px + new_w // 2
-    glow_cy = py + new_h // 2
-    draw_radial_glow(canvas, glow_cx, glow_cy)
-    draw = ImageDraw.Draw(canvas)
-
-    canvas.alpha_composite(hero_rs, (px, py))
-    draw = ImageDraw.Draw(canvas)
-
-    chip_y_top    = hero_bottom + CHIP_TOP_GAP
+    # --- Draw chips below model text, left-aligned ---
+    chip_y_top    = model_bottom + 8
     chip_y_center = chip_y_top + chip_row_h // 2
-    chip_start_x  = (W - total_chips_w) // 2
-    cur_x         = chip_start_x
+    cur_x         = header_left
     for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
         if icon:
             icon_y = chip_y_center - ICON_SIZE // 2
@@ -570,8 +551,38 @@ def _render_product(
             cur_x += CHIP_GAP_X + DIVIDER_WIDTH
 
     chips_bottom = chip_y_top + chip_row_h
+
+    # --- Hero sizing and positioning (below chips) ---
+    hero_w, hero_h = hero.size
+    TARGET_H_RATIO = 0.62
+    target_h       = int(H * TARGET_H_RATIO)
+    scale          = target_h / hero_h
+    new_w          = max(1, int(hero_w * scale))
+    new_h          = max(1, int(hero_h * scale))
+    hero_rs        = hero.resize((new_w, new_h), resample=Image.LANCZOS)
+
+    px = (W - new_w) // 2
+    px = max(px, pad)
+    px = min(px, W - new_w - 10)
+    py = chips_bottom + 10
+    max_hero_bottom = H - needed_below
+    if py + new_h > max_hero_bottom:
+        py = max_hero_bottom - new_h
+        py = max(py, chips_bottom + 5)
+    hero_bottom = py + new_h
+
+    # --- Glow + Hero composite ---
+    glow_cx = px + new_w // 2
+    glow_cy = py + new_h // 2
+    draw_radial_glow(canvas, glow_cx, glow_cy)
+    draw = ImageDraw.Draw(canvas)
+
+    canvas.alpha_composite(hero_rs, (px, py))
+    draw = ImageDraw.Draw(canvas)
+
+    # --- CTA pill below hero ---
     cta_x0 = (W - cta_w) // 2
-    cta_y0 = chips_bottom + CTA_GAP_Y
+    cta_y0 = hero_bottom + CTA_GAP_Y
     cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
     cta_x1 = cta_x0 + cta_w
     cta_y1 = cta_y0 + cta_h
