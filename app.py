@@ -398,8 +398,7 @@ def load_icon(filename: str, box_size: int) -> Optional[Image.Image]:
 
 
 CHIP_ICONS = {
-    0: "bearings_1.png",
-    1: "Gear_Ratio_1.png",
+    # Icons removed — chips are now text-only for flexibility
 }
 
 
@@ -525,20 +524,14 @@ def _render_product(
         by1        = by0 + bh
         draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
-    # --- Draw chips below model text, left-aligned, STACKED vertically ---
+    # --- Draw chips below model text, CENTERED horizontally, STACKED vertically ---
     CHIP_MODEL_GAP = 20          # space between SOLARIA text and first chip
     CHIP_LINE_GAP  = 6           # space between stacked chip lines
     chip_cur_y = model_bottom + CHIP_MODEL_GAP
     for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
         line_center_y = chip_cur_y + gh // 2
-        cur_x = header_left
-        if icon:
-            icon_y = line_center_y - ICON_SIZE // 2
-            canvas.alpha_composite(icon, (cur_x, icon_y))
-            draw = ImageDraw.Draw(canvas)
-            text_x = cur_x + icon_w + ICON_TEXT_GAP
-        else:
-            text_x = cur_x
+        # Center this chip line horizontally on the canvas
+        text_x = (W - tw) // 2
         bbox   = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
         text_y = line_center_y - text_h // 2 - bbox[1]
