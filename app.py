@@ -525,13 +525,15 @@ def _render_product(
         by1        = by0 + bh
         draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
-    # --- Draw chips below model text, left-aligned ---
-    chip_y_top    = model_bottom + 8
-    chip_y_center = chip_y_top + chip_row_h // 2
-    cur_x         = header_left
+    # --- Draw chips below model text, left-aligned, STACKED vertically ---
+    CHIP_MODEL_GAP = 20          # space between SOLARIA text and first chip
+    CHIP_LINE_GAP  = 6           # space between stacked chip lines
+    chip_cur_y = model_bottom + CHIP_MODEL_GAP
     for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
+        line_center_y = chip_cur_y + gh // 2
+        cur_x = header_left
         if icon:
-            icon_y = chip_y_center - ICON_SIZE // 2
+            icon_y = line_center_y - ICON_SIZE // 2
             canvas.alpha_composite(icon, (cur_x, icon_y))
             draw = ImageDraw.Draw(canvas)
             text_x = cur_x + icon_w + ICON_TEXT_GAP
@@ -539,18 +541,11 @@ def _render_product(
             text_x = cur_x
         bbox   = draw.textbbox((0, 0), c, font=chip_font)
         text_h = bbox[3] - bbox[1]
-        text_y = chip_y_center - text_h // 2 - bbox[1]
+        text_y = line_center_y - text_h // 2 - bbox[1]
         draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
-        cur_x += gw
-        if idx < len(chip_groups) - 1:
-            div_x     = cur_x + CHIP_GAP_X // 2
-            div_y_top = chip_y_center - int(chip_row_h * 0.35)
-            div_y_bot = chip_y_center + int(chip_row_h * 0.35)
-            draw.line([(div_x, div_y_top), (div_x, div_y_bot)],
-                      fill=divider_color, width=DIVIDER_WIDTH)
-            cur_x += CHIP_GAP_X + DIVIDER_WIDTH
+        chip_cur_y += gh + CHIP_LINE_GAP
 
-    chips_bottom = chip_y_top + chip_row_h
+    chips_bottom = chip_cur_y
 
     # --- Hero sizing and positioning (below chips) ---
     hero_w, hero_h = hero.size
