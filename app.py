@@ -511,7 +511,7 @@ def _render_product(
     new_h          = max(1, int(hero_h * scale))
     hero_rs        = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    px = (W - new_w) // 2 + 100
+    px = (W - new_w) // 2
     px = max(px, pad)
     px = min(px, W - new_w - 10)
     py = int(H * 0.22)
