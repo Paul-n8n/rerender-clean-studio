@@ -524,23 +524,7 @@ def _render_product(
         by1        = by0 + bh
         draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
-    # --- Draw chips below model text, CENTERED horizontally, STACKED vertically ---
-    CHIP_MODEL_GAP = 20          # space between SOLARIA text and first chip
-    CHIP_LINE_GAP  = 6           # space between stacked chip lines
-    chip_cur_y = model_bottom + CHIP_MODEL_GAP
-    for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
-        line_center_y = chip_cur_y + gh // 2
-        # Center this chip line horizontally on the canvas
-        text_x = (W - tw) // 2
-        bbox   = draw.textbbox((0, 0), c, font=chip_font)
-        text_h = bbox[3] - bbox[1]
-        text_y = line_center_y - text_h // 2 - bbox[1]
-        draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
-        chip_cur_y += gh + CHIP_LINE_GAP
-
-    chips_bottom = chip_cur_y
-
-    # --- Hero sizing and positioning (below chips) ---
+    # --- Hero sizing and positioning (independent of chips) ---
     hero_w, hero_h = hero.size
     TARGET_H_RATIO = 0.62
     target_h       = int(H * TARGET_H_RATIO)
@@ -552,11 +536,10 @@ def _render_product(
     px = (W - new_w) // 2
     px = max(px, pad)
     px = min(px, W - new_w - 10)
-    py = chips_bottom + 10
+    py = int(H * 0.22)
     max_hero_bottom = H - needed_below
     if py + new_h > max_hero_bottom:
         py = max_hero_bottom - new_h
-        py = max(py, chips_bottom + 5)
     hero_bottom = py + new_h
 
     # --- Glow + Hero composite ---
@@ -567,6 +550,20 @@ def _render_product(
 
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
+
+    # --- Draw chips ON TOP of hero, LEFT-aligned, vertically centered with reel ---
+    CHIP_LINE_GAP  = 6           # space between stacked chip lines
+    total_chip_h = sum(gh for _, _, _, _, gh, _, _ in chip_groups) + CHIP_LINE_GAP * max(0, len(chip_groups) - 1)
+    hero_center_y = py + new_h // 2
+    chip_cur_y = hero_center_y - total_chip_h // 2
+    for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
+        line_center_y = chip_cur_y + gh // 2
+        text_x = header_left
+        bbox   = draw.textbbox((0, 0), c, font=chip_font)
+        text_h = bbox[3] - bbox[1]
+        text_y = line_center_y - text_h // 2 - bbox[1]
+        draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
+        chip_cur_y += gh + CHIP_LINE_GAP
 
     # --- CTA pill below hero ---
     cta_x0 = (W - cta_w) // 2
