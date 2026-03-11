@@ -444,6 +444,8 @@ def _render_product(
     chip1: str,
     chip2: str,
     chip3: str,
+    chip4: str = "",
+    chip5: str = "",
 ) -> bytes:
     """Compose a 1000×1000 product card and return raw PNG bytes."""
     W, H = 1000, 1000
@@ -474,7 +476,8 @@ def _render_product(
                                       start_size=200, min_size=72, loader=load_font_bold)
     model_y = header_top + brand_h - 6
 
-    features = [(chip1 or "").strip(), (chip2 or "").strip()]
+    features = [(chip1 or "").strip(), (chip2 or "").strip(),
+                 (chip4 or "").strip(), (chip5 or "").strip()]
     features = [c for c in features if c]
 
     chip_font  = load_font_bold(36)
@@ -596,9 +599,11 @@ def render_p1(
     chip1: str = Query("3BB"),
     chip2: str = Query("5.1:1"),
     chip3: str = Query("RS1000-6000"),
+    chip4: str = Query(""),
+    chip5: str = Query(""),
     theme: str = Query("yellow"),
 ):
-    png = _render_product(_load_hero(key), theme, brand, model, chip1, chip2, chip3)
+    png = _render_product(_load_hero(key), theme, brand, model, chip1, chip2, chip3, chip4, chip5)
     return Response(content=png, media_type="image/png")
 
 
