@@ -155,17 +155,17 @@ def fit_text(draw, text, max_w, start_size, min_size=16, loader=load_font_regula
     return loader(min_size), text
 
 
-def fit_text_p3_model(draw, text, max_w, loader=load_font_bold):
+def fit_text_p3_model(draw, text, max_w, loader=load_font_bold, start_size=210):
     """
     Three-phase model name fitting for P3 cards.
-      Phase 1 – single line, shrink 210 → 80 (step 2)
+      Phase 1 – single line, shrink start_size → 80 (step 2)
       Phase 2 – two-line word-wrap, shrink 136 → 52 (step 2),
                  most-balanced split (minimises max line width)
       Phase 3 – truncate at size 80 with "…"
     Returns (font, line1, line2_or_None).
     """
     # ── Phase 1: single line ──────────────────────────────────────────
-    for size in range(210, 80 - 1, -2):
+    for size in range(start_size, 80 - 1, -2):
         font = loader(size)
         w, _ = text_size(draw, text, font)
         if w <= max_w:
@@ -694,7 +694,7 @@ def render_p2(key: str = Query(...)):
 # =====================================================================
 
 # Hero occupies 40% of canvas height — compact to fit chips + spec table below
-P3_FIT_RATIO    = 0.48
+P3_FIT_RATIO    = 0.45
 P3_HERO_X_SHIFT = 0            # centred horizontally (no shift)
 
 # Spec table geometry
@@ -758,6 +758,7 @@ def _render_p3(
     model_text = (model or "").strip().upper()
     model_font, model_line1, model_line2 = fit_text_p3_model(
         draw, model_text, max_w=header_max_w, loader=load_font_bold,
+        start_size=140,   # capped smaller than P1 to save vertical space
     )
     model_y      = header_top + brand_h - 6
     model_line_h = text_size(draw, model_line1, model_font)[1]
