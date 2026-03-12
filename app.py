@@ -532,20 +532,22 @@ def _render_product(
     CHIP_HERO_GAP = 40           # minimum px gap between widest chip and hero left edge
     chip_right_edge = header_left + max_chip_tw + CHIP_HERO_GAP
 
-    # --- Hero sizing and positioning (auto-pushed right of chips) ---
+    # --- Hero sizing: fit into the right zone (between chip_right_edge and canvas edge) ---
     hero_w, hero_h = hero.size
+    right_zone_w   = W - chip_right_edge - 20   # available width for hero
     TARGET_H_RATIO = 0.62
     target_h       = int(H * TARGET_H_RATIO)
-    scale          = target_h / hero_h
+    scale_h        = target_h / hero_h
+    scale_w        = right_zone_w / hero_w
+    scale          = min(scale_h, scale_w)       # fit whichever is tighter
     new_w          = max(1, int(hero_w * scale))
     new_h          = max(1, int(hero_h * scale))
     hero_rs        = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Hero left edge = max(chip_right_edge, default 62% cx position)
-    default_cx     = int(W * 0.62)
-    default_px     = default_cx - new_w // 2
-    px             = max(chip_right_edge, default_px)
-    px             = max(px, pad)
+    # Centre hero in the right zone
+    right_zone_cx  = chip_right_edge + right_zone_w // 2
+    px             = right_zone_cx - new_w // 2
+    px             = max(px, chip_right_edge)
     px             = min(px, W - new_w - 10)
     py             = int(H * 0.22)
     max_hero_bottom = H - needed_below
