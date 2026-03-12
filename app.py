@@ -694,13 +694,13 @@ def render_p2(key: str = Query(...)):
 # =====================================================================
 
 # Hero occupies 40% of canvas height — compact to fit chips + spec table below
-P3_FIT_RATIO    = 0.45
+P3_FIT_RATIO    = 0.48
 P3_HERO_X_SHIFT = 0            # centred horizontally (no shift)
 
 # Spec table geometry
-P3_SPEC_ROW_H      = 48           # height of each spec data row (px)  — was 44
-P3_SPEC_PAD_Y      = 12           # inner vertical padding top/bottom    — was 10
-P3_SPEC_HEADER_H   = 30           # height of "TECH SPECS" header row inside pill
+P3_SPEC_ROW_H      = 42           # height of each spec data row (px)  — compact
+P3_SPEC_PAD_Y      = 8            # inner vertical padding top/bottom    — compact
+P3_SPEC_HEADER_H   = 26           # height of "TECH SPECS" header row inside pill
 P3_SPEC_RADIUS     = 14           # corner radius of table background pill
 P3_SPEC_LABELS     = ["Gear Ratio", "Max Drag", "Weight"]   # 3 rows; Line Cap. removed (varies per size)
 
@@ -738,10 +738,10 @@ def _render_p3(
     divider_color   = tc["divider"]
 
     pad          = 56
-    top_pad      = 44
-    BOTTOM_SAFE  = 28
-    CHIP_TOP_GAP = 14
-    SPEC_GAP_Y   = 32
+    top_pad      = 36
+    BOTTOM_SAFE  = 20
+    CHIP_TOP_GAP = 10
+    SPEC_GAP_Y   = 20
 
     # ── Header: brand + model (top-left) ──────────────────────────────
     header_left  = pad
@@ -751,16 +751,16 @@ def _render_p3(
     brand_text = (brand or "").strip().upper()
     brand_font, brand_text = fit_text(
         draw, brand_text, max_w=header_max_w,
-        start_size=60, min_size=32, loader=load_font_regular,
+        start_size=44, min_size=28, loader=load_font_regular,
     )
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
     model_text = (model or "").strip().upper()
     model_font, model_line1, model_line2 = fit_text_p3_model(
         draw, model_text, max_w=header_max_w, loader=load_font_bold,
-        start_size=140,   # capped smaller than P1 to save vertical space
+        start_size=100,   # compact header to fit reel + spec table
     )
-    model_y      = header_top + brand_h - 6
+    model_y      = header_top + brand_h - 4
     model_line_h = text_size(draw, model_line1, model_font)[1]
 
     # ── Chip metrics ──────────────────────────────────────────────────
