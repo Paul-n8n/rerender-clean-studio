@@ -16,7 +16,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-12a"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-12b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -535,7 +535,7 @@ def _render_product(
     # --- Hero sizing: fit into the right zone (between chip_right_edge and canvas edge) ---
     hero_w, hero_h = hero.size
     right_zone_w   = W - chip_right_edge - 20   # available width for hero
-    TARGET_H_RATIO = 0.62
+    TARGET_H_RATIO = 0.68
     target_h       = int(H * TARGET_H_RATIO)
     scale_h        = target_h / hero_h
     scale_w        = right_zone_w / hero_w
@@ -544,9 +544,9 @@ def _render_product(
     new_h          = max(1, int(hero_h * scale))
     hero_rs        = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Centre hero in the right zone
-    right_zone_cx  = chip_right_edge + right_zone_w // 2
-    px             = right_zone_cx - new_w // 2
+    # Position hero slightly left of right-zone centre (30% into the zone)
+    right_zone_left_bias = chip_right_edge + int(right_zone_w * 0.30)
+    px             = right_zone_left_bias - new_w // 2
     px             = max(px, chip_right_edge)
     px             = min(px, W - new_w - 10)
     py             = int(H * 0.22)
@@ -564,11 +564,12 @@ def _render_product(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # --- Draw chips LEFT-aligned, vertically centered with reel ---
+    # --- Draw chips LEFT-aligned, upper-third of reel area ---
     CHIP_LINE_GAP  = 6           # space between stacked chip lines
     total_chip_h = sum(gh for _, _, _, _, gh, _, _ in chip_groups) + CHIP_LINE_GAP * max(0, len(chip_groups) - 1)
-    hero_center_y = py + new_h // 2
-    chip_cur_y = hero_center_y - total_chip_h // 2
+    # Align chips at ~40% of reel height (upper body area)
+    chip_anchor_y = py + int(new_h * 0.40)
+    chip_cur_y = chip_anchor_y - total_chip_h // 2
 
     for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
         line_center_y = chip_cur_y + gh // 2
