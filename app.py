@@ -803,10 +803,9 @@ def _render_p3(
 
     # Position: centred in the zone between header bottom and chips/spec area
     needed_below = CHIP_TOP_GAP + chip_row_h + SPEC_GAP_Y + spec_table_h + BOTTOM_SAFE
-    # Header (brand + model text) occupies roughly top 30% of canvas
-    # Use actual model text bottom to avoid overlap
+    # Use actual model text bottom — no fixed floor, let compact header save space
     actual_header_bottom = model_y + model_line_h + (model_line_h + 2 if model_line2 else 0) + 10
-    header_bottom_y = max(int(H * 0.30), actual_header_bottom)
+    header_bottom_y = actual_header_bottom
     max_hero_bottom = H - needed_below
     available_h = max_hero_bottom - header_bottom_y
     # Centre hero vertically in the available zone
