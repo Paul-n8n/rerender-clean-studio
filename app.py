@@ -694,13 +694,13 @@ def render_p2(key: str = Query(...)):
 # =====================================================================
 
 # Hero occupies 40% of canvas height — compact to fit chips + spec table below
-P3_FIT_RATIO    = 0.44
+P3_FIT_RATIO    = 0.48
 P3_HERO_X_SHIFT = 0            # centred horizontally (no shift)
 
 # Spec table geometry
-P3_SPEC_ROW_H      = 42           # height of each spec data row (px)  — compact
-P3_SPEC_PAD_Y      = 8            # inner vertical padding top/bottom    — compact
-P3_SPEC_HEADER_H   = 26           # height of "TECH SPECS" header row inside pill
+P3_SPEC_ROW_H      = 36           # height of each spec data row (px)  — tight
+P3_SPEC_PAD_Y      = 6            # inner vertical padding top/bottom    — tight
+P3_SPEC_HEADER_H   = 22           # height of "TECH SPECS" header row inside pill
 P3_SPEC_RADIUS     = 14           # corner radius of table background pill
 P3_SPEC_LABELS     = ["Gear Ratio", "Max Drag", "Weight"]   # 3 rows; Line Cap. removed (varies per size)
 
@@ -739,9 +739,9 @@ def _render_p3(
 
     pad          = 56
     top_pad      = 36
-    BOTTOM_SAFE  = 20
-    CHIP_TOP_GAP = 10
-    SPEC_GAP_Y   = 20
+    BOTTOM_SAFE  = 14
+    CHIP_TOP_GAP = 8
+    SPEC_GAP_Y   = 12
 
     # ── Header: brand + model (top-left) ──────────────────────────────
     header_left  = pad
