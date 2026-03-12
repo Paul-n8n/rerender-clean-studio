@@ -527,7 +527,12 @@ def _render_product(
         by1        = by0 + bh
         draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
 
-    # --- Hero sizing and positioning (independent of chips) ---
+    # --- Measure chip text width to auto-separate from hero ---
+    max_chip_tw = max((tw for _, tw, _, _, _, _, _ in chip_groups), default=0)
+    CHIP_HERO_GAP = 40           # minimum px gap between widest chip and hero left edge
+    chip_right_edge = header_left + max_chip_tw + CHIP_HERO_GAP
+
+    # --- Hero sizing and positioning (auto-pushed right of chips) ---
     hero_w, hero_h = hero.size
     TARGET_H_RATIO = 0.62
     target_h       = int(H * TARGET_H_RATIO)
@@ -536,10 +541,13 @@ def _render_product(
     new_h          = max(1, int(hero_h * scale))
     hero_rs        = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    px = (W - new_w) // 2 - 50       # shift reel slightly left
-    px = max(px, pad)
-    px = min(px, W - new_w - 10)
-    py = int(H * 0.22)
+    # Hero left edge = max(chip_right_edge, default 62% cx position)
+    default_cx     = int(W * 0.62)
+    default_px     = default_cx - new_w // 2
+    px             = max(chip_right_edge, default_px)
+    px             = max(px, pad)
+    px             = min(px, W - new_w - 10)
+    py             = int(H * 0.22)
     max_hero_bottom = H - needed_below
     if py + new_h > max_hero_bottom:
         py = max_hero_bottom - new_h
@@ -554,11 +562,12 @@ def _render_product(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # --- Draw chips ON TOP of hero, LEFT-aligned, vertically centered with reel ---
+    # --- Draw chips LEFT-aligned, vertically centered with reel ---
     CHIP_LINE_GAP  = 6           # space between stacked chip lines
     total_chip_h = sum(gh for _, _, _, _, gh, _, _ in chip_groups) + CHIP_LINE_GAP * max(0, len(chip_groups) - 1)
     hero_center_y = py + new_h // 2
     chip_cur_y = hero_center_y - total_chip_h // 2
+
     for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
         line_center_y = chip_cur_y + gh // 2
         text_x = header_left
