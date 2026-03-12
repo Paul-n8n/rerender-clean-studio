@@ -694,7 +694,7 @@ def render_p2(key: str = Query(...)):
 # =====================================================================
 
 # Hero occupies 40% of canvas height — compact to fit chips + spec table below
-P3_FIT_RATIO    = 0.40
+P3_FIT_RATIO    = 0.50
 P3_HERO_X_SHIFT = 0            # centred horizontally (no shift)
 
 # Spec table geometry
