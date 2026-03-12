@@ -693,9 +693,9 @@ def render_p2(key: str = Query(...)):
 # Canvas: 1024×1024, themed background (same assets as P1).
 # =====================================================================
 
-# Hero occupies 50% of canvas height — smaller than P1 to fit spec table
-P3_FIT_RATIO    = 0.55
-P3_HERO_X_SHIFT = 50           # slight right shift (px) to mirror P1 composition
+# Hero occupies 40% of canvas height — compact to fit chips + spec table below
+P3_FIT_RATIO    = 0.40
+P3_HERO_X_SHIFT = 0            # centred horizontally (no shift)
 
 # Spec table geometry
 P3_SPEC_ROW_H      = 48           # height of each spec data row (px)  — was 44
@@ -800,15 +800,19 @@ def _render_p3(
     new_h    = max(1, int(hh * scale))
     hero_rs  = hero.resize((new_w, new_h), Image.LANCZOS)
 
-    # Position: slight right offset, leave room below for chips + spec table
+    # Position: centred in the zone between header bottom and chips/spec area
     needed_below = CHIP_TOP_GAP + chip_row_h + SPEC_GAP_Y + spec_table_h + BOTTOM_SAFE
+    # Header occupies roughly top 20%; available zone is 20%–(100%-needed_below)
+    header_bottom_y = int(H * 0.22)
+    max_hero_bottom = H - needed_below
+    available_h = max_hero_bottom - header_bottom_y
+    # Centre hero vertically in the available zone
+    py = header_bottom_y + (available_h - new_h) // 2
+    py = max(py, header_bottom_y)
+    # Centre hero horizontally (slight left bias via shift)
     px = (W - new_w) // 2 + P3_HERO_X_SHIFT
     px = max(px, pad)
     px = min(px, W - new_w - 10)
-    py = int(H * 0.18)
-    max_hero_bottom = H - needed_below
-    if py + new_h > max_hero_bottom:
-        py = max(top_pad + 20, max_hero_bottom - new_h)
     hero_bottom = py + new_h
 
     # ── Draw text header ──────────────────────────────────────────────
