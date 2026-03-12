@@ -802,14 +802,16 @@ def _render_p3(
 
     # Position: centred in the zone between header bottom and chips/spec area
     needed_below = CHIP_TOP_GAP + chip_row_h + SPEC_GAP_Y + spec_table_h + BOTTOM_SAFE
-    # Header occupies roughly top 20%; available zone is 20%–(100%-needed_below)
-    header_bottom_y = int(H * 0.22)
+    # Header (brand + model text) occupies roughly top 30% of canvas
+    # Use actual model text bottom to avoid overlap
+    actual_header_bottom = model_y + model_line_h + (model_line_h + 2 if model_line2 else 0) + 10
+    header_bottom_y = max(int(H * 0.30), actual_header_bottom)
     max_hero_bottom = H - needed_below
     available_h = max_hero_bottom - header_bottom_y
     # Centre hero vertically in the available zone
     py = header_bottom_y + (available_h - new_h) // 2
     py = max(py, header_bottom_y)
-    # Centre hero horizontally (slight left bias via shift)
+    # Centre hero horizontally
     px = (W - new_w) // 2 + P3_HERO_X_SHIFT
     px = max(px, pad)
     px = min(px, W - new_w - 10)
