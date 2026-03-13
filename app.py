@@ -1,4 +1,5 @@
 import os
+import re
 from io import BytesIO
 from typing import List, Optional
 
@@ -1155,8 +1156,7 @@ P5_CHIP_SIZE     = 38     # chip font size
 
 def _normalize_pk(product_key: str) -> str:
     """Normalize product_key to match R2 path format used by Worker upload.
-    'SOLARIA | SZ=1000-5000' → 'SOLARIA___SZ_1000_5000'"""
-    import re
+    'SOLARIA | SZ=1000-5000' -> 'SOLARIA___SZ_1000_5000'"""
     s = product_key.upper().replace("|", "__")
     s = re.sub(r"[^A-Z0-9]+", "_", s)
     s = s.strip("_")
