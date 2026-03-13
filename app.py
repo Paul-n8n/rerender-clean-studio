@@ -1153,6 +1153,16 @@ P5_CHIP_BOTTOM   = 52     # px from bottom edge to chip row baseline
 P5_CHIP_SIZE     = 38     # chip font size
 
 
+def _normalize_pk(product_key: str) -> str:
+    """Normalize product_key to match R2 path format used by Worker upload.
+    'SOLARIA | SZ=1000-5000' → 'SOLARIA___SZ_1000_5000'"""
+    import re
+    s = product_key.upper().replace("|", "__")
+    s = re.sub(r"[^A-Z0-9]+", "_", s)
+    s = s.strip("_")
+    return s
+
+
 def _load_p5_hero(product_key: str, group: str):
     """Try slots in priority order until one exists in R2.
     Returns (PIL Image RGBA, slot_name_used)."""
@@ -1166,9 +1176,10 @@ def _load_p5_hero(product_key: str, group: str):
     if not bucket:
         raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
     s3 = r2_client()
+    pk_norm = _normalize_pk(product_key)
     for slot in slots:
         for ext in ("png", "jpg", "jpeg"):
-            key = f"raw/{product_key}/{group}/{slot}.{ext}"
+            key = f"raw/{pk_norm}/{group}/{slot}.{ext}"
             try:
                 obj  = s3.get_object(Bucket=bucket, Key=key)
                 data = obj["Body"].read()
@@ -1384,9 +1395,10 @@ def _load_p6_hero(product_key: str, group: str) -> tuple:
         raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
     s3 = r2_client()
     slots = ["P3_DETAIL_CUTOUT", "P2_ANGLE_CUTOUT", "P1_HERO_CUTOUT"]
+    pk_norm = _normalize_pk(product_key)
     for slot in slots:
         for ext in ("png", "jpg", "jpeg"):
-            key = f"raw/{product_key}/{group}/{slot}.{ext}"
+            key = f"raw/{pk_norm}/{group}/{slot}.{ext}"
             try:
                 obj  = s3.get_object(Bucket=bucket, Key=key)
                 data = obj["Body"].read()
@@ -1645,9 +1657,10 @@ def _load_p7_hero(product_key: str, group: str) -> tuple:
     s3 = r2_client()
     slots = ["P7_BOX_PHOTO", "P7_BOX_CUTOUT",
              "P2_ANGLE_CUTOUT", "P3_DETAIL_CUTOUT", "P1_HERO_CUTOUT"]
+    pk_norm = _normalize_pk(product_key)
     for slot in slots:
         for ext in ("png", "jpg", "jpeg"):
-            key = f"raw/{product_key}/{group}/{slot}.{ext}"
+            key = f"raw/{pk_norm}/{group}/{slot}.{ext}"
             try:
                 obj  = s3.get_object(Bucket=bucket, Key=key)
                 data = obj["Body"].read()
@@ -1877,9 +1890,10 @@ def _load_p8_watermark(product_key: str, group: str) -> tuple:
         if not bucket:
             return None, ""
         s3 = r2_client()
+        pk_norm = _normalize_pk(product_key)
         for slot in ("P1_HERO_CUTOUT", "P2_ANGLE_CUTOUT", "P3_DETAIL_CUTOUT"):
             for ext in ("png", "jpg", "jpeg"):
-                key = f"raw/{product_key}/{group}/{slot}.{ext}"
+                key = f"raw/{pk_norm}/{group}/{slot}.{ext}"
                 try:
                     obj  = s3.get_object(Bucket=bucket, Key=key)
                     data = obj["Body"].read()
