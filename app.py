@@ -17,7 +17,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-14b"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-15a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1464,7 +1464,7 @@ _P6_FUZZY_PATTERNS = [
         r'(.+)', re.I), "BB"),
     # Skip patterns — "Max line winding length ...", "Line capacity ..."
     (re.compile(
-        r'(?:line\s*cap|winding|retriev|capacity|kapasiti|knob)', re.I),
+        r'(?:line\s*cap|winding|retriev|crank|capacity|kapasiti|knob)', re.I),
         "_SKIP"),
 ]
 
@@ -1536,15 +1536,24 @@ def _parse_specs_paste(raw: str) -> list:
             l_up = l.strip().upper()
             v_s = v.strip()
 
-            # Explicit MODEL: prefix
-            if l_up == "MODEL" and v_s:
+            # MODEL / MODEL NUMBER / MODEL NO prefix → new model
+            if (l_up == "MODEL" or l_up.startswith("MODEL ")) and v_s:
                 if current:
                     models.append(current)
                 current = {"MODEL": v_s.upper()}
                 continue
 
-            # Known alias via colon
-            c = _P6_PARSE_ALIASES.get(l_up)
+            # Strip parenthetical from label: "WEIGHT(G)" → "WEIGHT"
+            l_clean = re.sub(r"\s*\(.*\)", "", l_up).strip()
+
+            # Known alias via colon (try exact, then cleaned)
+            c = _P6_PARSE_ALIASES.get(l_up) or _P6_PARSE_ALIASES.get(l_clean)
+            if not c:
+                # Prefix match: "LINE CAPACITY PE (NO./M)" starts with "LINE CAPACITY"
+                for alias_key, alias_val in _P6_PARSE_ALIASES.items():
+                    if l_up.startswith(alias_key) or l_clean.startswith(alias_key):
+                        c = alias_val
+                        break
             if c:
                 if c != "_SKIP" and c in P6_SPEC_KEYS and v_s:
                     current[c] = v_s
@@ -1584,7 +1593,7 @@ def _parse_specs_paste(raw: str) -> list:
                         "HIGHLIGHTS", "STANDARD", "OPTIONAL", "INCLUDED",
                         "ACCESSORIES"}
         _NOISE_WORDS = {"SPINNING REEL", "FISHING REEL", "BAITCASTING",
-                        "BAITCAST REEL"}
+                        "BAITCAST REEL", "REEL SERIES"}
         if (1 < len(candidate) <= 50
                 and any(c.isalpha() for c in candidate)
                 and not candidate.startswith("-")
@@ -1606,6 +1615,11 @@ def _parse_specs_paste(raw: str) -> list:
                 m[k] = "\u2014"
         if "MODEL" not in m:
             m["MODEL"] = "\u2014"
+
+    # Remove junk models with NO spec data (all "\u2014") — caused by
+    # marketing text, section headers, feature bullets being misidentified
+    models = [m for m in models
+              if any(m.get(k, "\u2014") != "\u2014" for k in P6_SPEC_KEYS)]
 
     return models
 
