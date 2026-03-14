@@ -17,7 +17,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-12b"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-14a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1368,188 +1368,197 @@ def render_p5(
 
 
 # =====================================================================
-# /render/p6 — Size Comparison Card
-# Two panels (left = min size, right = max size) at accurate relative
-# scale derived from alpha bounding-box heights.
-# Grid overlay acts as a visual ruler. Auto-fallback per slot.
+# /render/p6 — Specs Comparison Table
+# Parses specs_paste (multi-model spec text from seller page) into a
+# structured comparison table.  Ghost reel watermark (reuses P8 loader).
+# Falls back to "NO SPECS DATA" message when specs_paste is empty.
 # =====================================================================
 
-P6_GRID_SPACING    = 50
-P6_GRID_ALPHA      = 20     # ~8 % of 255
-P6_GRID_LW         = 2
-P6_TARGET_H        = 660    # max-reel bbox height target (px)
-P6_CONTENT_TOP     = 140    # y where reel content area starts
-P6_LABEL_TOP       = 880    # y where size labels start
-P6_BASELINE_Y      = 840    # common ground baseline — both reel bottoms land here
-P6_GAP             = 16     # min clearance from reel edge to divider line
 P6_TAG_PAD_X       = 14
 P6_TAG_PAD_Y       = 7
-P6_DIVIDER_A_BACK  = 31     # back-pass divider alpha (≈12 % of 255, drawn before reels)
-P6_DIVIDER_A_FRONT = 71     # front-pass divider alpha (≈28 % of 255, drawn after reels)
+P6_TABLE_PAD       = 48     # left/right padding inside card
+P6_TABLE_TOP       = 180    # y where table starts (below header)
+P6_COL_HEADER_H    = 44     # height of column header row
+P6_DATA_ROW_H      = 40     # height of each data row
+P6_TABLE_RADIUS    = 14     # corner radius of table background pill
+P6_WATERMARK_ALPHA = 28     # ghost reel alpha (~11% of 255)
+P6_WATERMARK_BLUR  = 10     # GaussianBlur radius for ghost effect
+
+# Spec keys to extract from paste text (order = column order in table)
+# LINE CAPACITY skipped — too detailed / varies per spool
+P6_SPEC_KEYS = ["BB", "RATIO", "WEIGHT", "DRAG"]
+P6_COL_LABELS = {
+    "MODEL":  "MODEL",
+    "BB":     "BB",
+    "RATIO":  "RATIO",
+    "WEIGHT": "WT (g)",
+    "DRAG":   "DRAG",
+}
+
+# Aliases for parsing — seller pages use many different labels
+_P6_PARSE_ALIASES = {
+    "BALL BEARING":    "BB",
+    "BALL BEARINGS":   "BB",
+    "BB":              "BB",
+    "BEARING":         "BB",
+    "BEARINGS":        "BB",
+    "GEAR RATIO":      "RATIO",
+    "RATIO":           "RATIO",
+    "WEIGHT":          "WEIGHT",
+    "BODY WEIGHT":     "WEIGHT",
+    "NET WEIGHT":      "WEIGHT",
+    "WT":              "WEIGHT",
+    "MAX DRAG":        "DRAG",
+    "DRAG":            "DRAG",
+    "DRAG POWER":      "DRAG",
+    "DRAG MAX":        "DRAG",
+    "PE":              "_SKIP",
+    "LINE CAPACITY":   "_SKIP",
+    "LINE CAP":        "_SKIP",
+    "SPOOL":           "_SKIP",
+}
 
 
-def _load_p6_hero(product_key: str, group: str) -> tuple:
-    """Try P3_DETAIL_CUTOUT → P2_ANGLE_CUTOUT → P1_HERO_CUTOUT for one key."""
-    bucket = os.environ.get("R2_BUCKET")
-    if not bucket:
-        raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
-    s3 = r2_client()
-    slots = ["P3_DETAIL_CUTOUT", "P2_ANGLE_CUTOUT", "P1_HERO_CUTOUT"]
-    pk_norm = _normalize_pk(product_key)
-    for slot in slots:
-        for ext in ("png", "jpg", "jpeg"):
-            key = f"raw/{pk_norm}/{group}/{slot}.{ext}"
-            try:
-                obj  = s3.get_object(Bucket=bucket, Key=key)
-                data = obj["Body"].read()
-                img  = Image.open(BytesIO(data)).convert("RGBA")
-                return img, slot
-            except Exception:
-                continue
-    raise HTTPException(status_code=404,
-                        detail=f"No hero found for {product_key}/{group}")
+def _parse_specs_paste(raw: str) -> list:
+    """Parse multi-model specs text into list of dicts.
 
+    Expected format (from seller pages):
+        MODEL: SLR1000
+        BALL BEARINGS: 5
+        GEAR RATIO: 5.2:1
+        ...
+        MODEL: SLR2000
+        BALL BEARINGS: 5
+        ...
 
-def _alpha_bbox(img: Image.Image) -> tuple:
-    """Returns (left, top, right, bottom) of non-transparent area, or full image bounds."""
-    bbox = img.split()[3].getbbox()
-    return bbox if bbox else (0, 0, img.width, img.height)
+    Returns: [{"MODEL": "SLR1000", "BB": "5", "RATIO": "5.2:1", ...}, ...]
+    Each dict has keys: MODEL, BB, RATIO, WEIGHT, DRAG (missing = "—")
+    """
+    if not raw or not raw.strip():
+        return []
 
+    models = []
+    current = {}
 
-def _alpha_bbox_h(img: Image.Image) -> int:
-    """Height (px) of the non-transparent bounding box."""
-    _, t, _, b = _alpha_bbox(img)
-    return b - t
+    for line in raw.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
 
+        # Try to split on first colon
+        if ":" not in line:
+            continue
 
-def _draw_grid(canvas: Image.Image, W: int, H: int) -> None:
-    """Subtle grid overlay — acts as a visual ruler."""
-    grid = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    gd   = ImageDraw.Draw(grid)
-    for x in range(0, W + 1, P6_GRID_SPACING):
-        gd.line([(x, 0), (x, H)], fill=(200, 200, 200, P6_GRID_ALPHA), width=P6_GRID_LW)
-    for y in range(0, H + 1, P6_GRID_SPACING):
-        gd.line([(0, y), (W, y)], fill=(200, 200, 200, P6_GRID_ALPHA), width=P6_GRID_LW)
-    canvas.alpha_composite(grid)
+        label, _, value = line.partition(":")
+        label = label.strip().upper()
+        value = value.strip()
+
+        if not label or not value:
+            continue
+
+        # Check if this is a MODEL line — starts a new model block
+        if label == "MODEL":
+            if current:
+                models.append(current)
+            current = {"MODEL": value.upper()}
+            continue
+
+        # Map alias to canonical key
+        canon = _P6_PARSE_ALIASES.get(label)
+        if canon and canon != "_SKIP" and canon in P6_SPEC_KEYS:
+            current[canon] = value
+
+    # Don't forget the last model
+    if current:
+        models.append(current)
+
+    # Fill missing specs with "—"
+    for m in models:
+        for k in P6_SPEC_KEYS:
+            if k not in m:
+                m[k] = "—"
+        if "MODEL" not in m:
+            m["MODEL"] = "—"
+
+    return models
 
 
 def _render_p6(
-    min_hero:        Image.Image,
-    max_hero:        Image.Image,
-    slot_min:        str,
-    slot_max:        str,
-    theme:           str,
-    brand:           str,
-    model:           str,
-    size_min_label:  str,
-    size_max_label:  str,
-    size_min_weight: str,
-    size_max_weight: str,
-    compare_note:    str,
-    badge:           str,
+    watermark_img:  Optional[Image.Image],
+    slot_used:      str,
+    theme:          str,
+    brand:          str,
+    model:          str,
+    chip1:          str,
+    chip2:          str,
+    chip3:          str,
+    specs_data:     list,
 ) -> bytes:
-    W, H    = 1024, 1024
-    pad     = 48
-    top_pad = 36
-    panel_w = W // 2
+    """Compose a 1024×1024 P6 Specs Comparison Table card.
+
+    Layout:
+      - Theme background + optional ghost reel watermark
+      - Top-left: brand + model
+      - Top-right: "FULL SPECS" pill badge
+      - Translucent table with column headers + data rows
+      - Bottom: chip bar (BB / gear ratio / max drag)
+    """
+    W, H       = 1024, 1024
+    pad        = P6_TABLE_PAD
+    top_pad    = 36
+    tc         = get_theme_colors(theme)
+    text_color = tc["text"]
+    chip_text_color = tc["chip_text"]
+    divider_color   = tc["divider"]
+    is_dark    = (theme or "").lower() in _P3_DARK_THEMES
 
     # ── Background ────────────────────────────────────────────────────
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
-    tc         = get_theme_colors(theme)
-    text_color = tc["text"]
 
-    # ── Grid overlay ──────────────────────────────────────────────────
-    _draw_grid(canvas, W, H)
+    # ── Ghost reel watermark (same approach as P8) ────────────────────
+    if watermark_img is not None:
+        target_h = int(H * 0.80)
+        wm_scale = target_h / watermark_img.height
+        wm_w     = max(1, int(watermark_img.width * wm_scale))
+        wm_h     = target_h
+        wm = watermark_img.resize((wm_w, wm_h), Image.LANCZOS)
+        wm = wm.filter(ImageFilter.GaussianBlur(radius=P6_WATERMARK_BLUR))
+        r_ch, g_ch, b_ch, a_ch = wm.split()
+        a_ch = a_ch.point(lambda p: int(p * P6_WATERMARK_ALPHA / 255))
+        wm = Image.merge("RGBA", (r_ch, g_ch, b_ch, a_ch))
+        wx = int(W * 0.65) - wm_w // 2
+        wy = (H - wm_h) // 2
+        if wx < 0:
+            wm = wm.crop((-wx, 0, wm_w, wm_h))
+            wx = 0
+        if wy < 0:
+            wm = wm.crop((0, -wy, wm.width, wm_h))
+            wy = 0
+        canvas.alpha_composite(wm, (wx, wy))
 
-    # ── Back-pass divider (drawn before reels at low alpha) ───────────
-    _pre_draw = ImageDraw.Draw(canvas)
-    div_col_back  = (*text_color[:3], P6_DIVIDER_A_BACK)
-    div_col_front = (*text_color[:3], P6_DIVIDER_A_FRONT)
-    _pre_draw.line([(panel_w, P6_CONTENT_TOP + 20), (panel_w, P6_LABEL_TOP - 20)],
-                   fill=div_col_back, width=2)
-
-    # ── Auto-scale from alpha bounding-box ────────────────────────────
-    max_ab     = _alpha_bbox(max_hero)   # (left, top, right, bottom) in original
-    min_ab     = _alpha_bbox(min_hero)
-    max_bbox_h = max_ab[3] - max_ab[1]
-    min_bbox_h = min_ab[3] - min_ab[1]
-
-    # Natural size ratio from real bbox heights; clamp for visual sanity
-    ratio = (min_bbox_h / max_bbox_h) if max_bbox_h > 0 else 1.0
-    ratio = max(0.55, min(0.92, ratio))
-
-    # Scale max reel so bbox height = P6_TARGET_H
-    s_max  = P6_TARGET_H / max_bbox_h if max_bbox_h > 0 else 1.0
-    max_rs = max_hero.resize(
-        (max(1, int(max_hero.width * s_max)), max(1, int(max_hero.height * s_max))),
-        Image.LANCZOS)
-    max_bbox_bottom_px = int(max_ab[3] * s_max)  # y in scaled image where bbox bottom sits
-
-    # Scale min reel so bbox height = P6_TARGET_H * ratio
-    min_content_h      = int(P6_TARGET_H * ratio)
-    s_min  = min_content_h / min_bbox_h if min_bbox_h > 0 else 1.0
-    min_rs = min_hero.resize(
-        (max(1, int(min_hero.width * s_min)), max(1, int(min_hero.height * s_min))),
-        Image.LANCZOS)
-    min_bbox_bottom_px = int(min_ab[3] * s_min)  # y in scaled image where bbox bottom sits
-
-    # ── Enforce no-cross rule: max reel width = panel_w - 2*P6_GAP ───
-    # Ensures left reel right-edge ≤ divider-16  and  right reel left-edge ≥ divider+16
-    max_reel_w = panel_w - 2 * P6_GAP  # 480 px for 512-wide panels
-
-    if min_rs.width > max_reel_w:
-        shrink             = max_reel_w / min_rs.width
-        min_rs             = min_rs.resize(
-            (max_reel_w, max(1, int(min_rs.height * shrink))), Image.LANCZOS)
-        min_bbox_bottom_px = int(min_bbox_bottom_px * shrink)
-
-    if max_rs.width > max_reel_w:
-        shrink             = max_reel_w / max_rs.width
-        max_rs             = max_rs.resize(
-            (max_reel_w, max(1, int(max_rs.height * shrink))), Image.LANCZOS)
-        max_bbox_bottom_px = int(max_bbox_bottom_px * shrink)
-
-    # ── Place both reels on a common ground baseline ──────────────────
-    # Position image so its alpha-bbox bottom lands exactly at P6_BASELINE_Y
-    min_y = P6_BASELINE_Y - min_bbox_bottom_px
-    max_y = P6_BASELINE_Y - max_bbox_bottom_px
-    min_x = (panel_w - min_rs.width) // 2
-    max_x = panel_w + (panel_w - max_rs.width) // 2
-
-    # Glow centred at approximate mid-height of each reel's visible bbox
-    min_glow_y = P6_BASELINE_Y - min_bbox_bottom_px // 2
-    max_glow_y = P6_BASELINE_Y - max_bbox_bottom_px // 2
-    draw_radial_glow(canvas, panel_w // 2,           min_glow_y)
-    draw_radial_glow(canvas, panel_w + panel_w // 2, max_glow_y)
-
-    canvas.alpha_composite(min_rs, (max(0, min_x), max(0, min_y)))
-    canvas.alpha_composite(max_rs, (max(0, max_x), max(0, max_y)))
-
+    # Radial glow — centre
+    draw_radial_glow(canvas, W // 2, H // 2)
     draw = ImageDraw.Draw(canvas)
 
-    # ── Front-pass divider (drawn on top of reels at higher alpha) ────
-    draw.line([(panel_w, P6_CONTENT_TOP + 20), (panel_w, P6_LABEL_TOP - 20)],
-              fill=div_col_front, width=2)
-
     # ── Brand + model (top-left) ──────────────────────────────────────
-    text_max_w  = int(W * 0.55) - pad
-    brand_text  = (brand or "").strip().upper()
+    header_max_w = int(W * 0.55) - pad
+    brand_text   = (brand or "").strip().upper()
     brand_font, brand_text = fit_text(
-        draw, brand_text, max_w=text_max_w,
+        draw, brand_text, max_w=header_max_w,
         start_size=40, min_size=24, loader=load_font_regular)
     brand_h = text_size(draw, brand_text, brand_font)[1]
 
-    model_text  = (model or "").strip().upper()
+    model_text = (model or "").strip().upper()
     model_font, model_text = fit_text(
-        draw, model_text, max_w=text_max_w,
-        start_size=80, min_size=32, loader=load_font_bold)
+        draw, model_text, max_w=header_max_w,
+        start_size=72, min_size=28, loader=load_font_bold)
 
-    draw_text_align_left(draw, pad, top_pad,               brand_text, brand_font, text_color)
+    draw_text_align_left(draw, pad, top_pad, brand_text, brand_font, text_color)
     draw_text_align_left(draw, pad, top_pad + brand_h - 4, model_text, model_font, text_color)
 
-    # ── SIZE COMPARISON pill (top-right) ──────────────────────────────
+    # ── "FULL SPECS" pill (top-right) ─────────────────────────────────
     pill_font = load_font_bold(22)
-    pill_text = "SIZE COMPARISON"
+    pill_text = "FULL SPECS"
     pw, ph    = text_size(draw, pill_text, pill_font)
     pill_x    = W - pad - pw - P6_TAG_PAD_X * 2
     pill_y    = top_pad + 8
@@ -1558,42 +1567,155 @@ def _render_p6(
     draw.rounded_rectangle(pill_rect, radius=20, outline=text_color[:3], width=2)
     draw.text((pill_x, pill_y), pill_text, font=pill_font, fill=text_color)
 
-    # ── Size labels (bottom of each panel) ───────────────────────────
-    lbl_y     = P6_LABEL_TOP + 8
-    wt_y      = lbl_y + 60
-    size_font = load_font_bold(52)
-    wt_font   = load_font_regular(28)
-    faded     = (*text_color[:3], 180)
+    # ── Chip bar (bottom) ─────────────────────────────────────────────
+    chip_font  = load_font_bold(32)
+    features   = [(chip1 or "").strip(), (chip2 or "").strip(), (chip3 or "").strip()]
+    features   = [c for c in features if c]
 
-    # Min labels — left panel, centred
-    min_lbl = (size_min_label  or "").strip()
-    min_wt  = (size_min_weight or "").strip()
-    if min_lbl:
-        mlw, _ = text_size(draw, min_lbl, size_font)
-        draw.text(((panel_w - mlw) // 2, lbl_y), min_lbl, font=size_font, fill=text_color)
-    if min_wt:
-        mww, _ = text_size(draw, min_wt, wt_font)
-        draw.text(((panel_w - mww) // 2, wt_y), min_wt, font=wt_font, fill=faded)
+    chip_groups = []
+    for i, c in enumerate(features):
+        tw, th    = text_size(draw, c, chip_font)
+        icon_file = CHIP_ICONS.get(i)
+        icon      = load_icon(icon_file, ICON_SIZE) if icon_file else None
+        icon_w    = ICON_SIZE if icon else 0
+        group_w   = (icon_w + ICON_TEXT_GAP + tw) if icon else tw
+        group_h   = max(ICON_SIZE, th)
+        chip_groups.append((c, tw, th, group_w, group_h, icon, icon_w))
 
-    # Max labels — right panel, centred
-    max_lbl = (size_max_label  or "").strip()
-    max_wt  = (size_max_weight or "").strip()
-    if max_lbl:
-        xlw, _ = text_size(draw, max_lbl, size_font)
-        draw.text((panel_w + (panel_w - xlw) // 2, lbl_y), max_lbl, font=size_font, fill=text_color)
-    if max_wt:
-        xww, _ = text_size(draw, max_wt, wt_font)
-        draw.text((panel_w + (panel_w - xww) // 2, wt_y), max_wt, font=wt_font, fill=faded)
+    total_chips_w = sum(gw for _, _, _, gw, _, _, _ in chip_groups) + \
+                    max(0, len(chip_groups) - 1) * (CHIP_GAP_X + DIVIDER_WIDTH) if chip_groups else 0
+    chip_row_h    = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
 
-    # ── compare_note (bottom-centre) ─────────────────────────────────
-    if compare_note and compare_note.strip():
-        note_font = load_font_regular(24)
-        note_text = compare_note.strip()
-        nw, _     = text_size(draw, note_text, note_font)
-        draw.text(((W - nw) // 2, H - 36), note_text, font=note_font,
-                  fill=(*text_color[:3], 140))
+    # Position chip bar at bottom with safe margin
+    CHIP_BOTTOM_MARGIN = 24
+    chip_y_top    = H - CHIP_BOTTOM_MARGIN - chip_row_h if chip_groups else H
+    chip_y_center = chip_y_top + chip_row_h // 2
 
-    # ── Output ───────────────────────────────────────────────────────
+    # ── Specs table ───────────────────────────────────────────────────
+    n_models  = len(specs_data)
+    all_cols  = ["MODEL"] + P6_SPEC_KEYS   # 5 columns
+    n_cols    = len(all_cols)
+    table_x0  = pad
+    table_x1  = W - pad
+    table_w   = table_x1 - table_x0
+
+    # Calculate available height for table (between header and chip bar)
+    table_bottom_limit = chip_y_top - 20 if chip_groups else H - 40
+    table_top  = P6_TABLE_TOP
+
+    if n_models == 0:
+        # ── No specs data — show fallback message ────────────────────
+        no_data_font = load_font_bold(36)
+        nd_text = "NO SPECS DATA"
+        ndw, ndh = text_size(draw, nd_text, no_data_font)
+        faded = (*text_color[:3], 120)
+        draw.text(((W - ndw) // 2, (H - ndh) // 2), nd_text, font=no_data_font, fill=faded)
+    else:
+        # Dynamic row height: fit all models + header in available space
+        avail_h    = table_bottom_limit - table_top
+        row_h      = min(P6_DATA_ROW_H, max(28, (avail_h - P6_COL_HEADER_H) // n_models))
+        table_h    = P6_COL_HEADER_H + row_h * n_models
+
+        # Column widths: MODEL gets 30%, rest split evenly
+        model_col_w = int(table_w * 0.30)
+        spec_col_w  = (table_w - model_col_w) // (n_cols - 1)
+
+        col_xs = [table_x0]   # MODEL column start
+        for i in range(1, n_cols):
+            col_xs.append(table_x0 + model_col_w + spec_col_w * (i - 1))
+
+        # Translucent table background pill
+        bg_fill = _P3_SPEC_BG_DARK if is_dark else _P3_SPEC_BG_LIGHT
+        spec_bg = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        spec_bg_draw = ImageDraw.Draw(spec_bg)
+        spec_bg_draw.rounded_rectangle(
+            (table_x0, table_top, table_x1, table_top + table_h),
+            radius=P6_TABLE_RADIUS, fill=bg_fill,
+        )
+        canvas.alpha_composite(spec_bg)
+        draw = ImageDraw.Draw(canvas)
+
+        header_fill = (255, 255, 255, 180) if is_dark else (60, 60, 60, 200)
+        label_fill  = (255, 255, 255, 160) if is_dark else (60, 60, 60, 180)
+        value_fill  = text_color
+
+        # ── Column header row ─────────────────────────────────────────
+        header_font = load_font_bold(18)
+        header_y    = table_top + (P6_COL_HEADER_H - 18) // 2
+
+        for ci, col_key in enumerate(all_cols):
+            label = P6_COL_LABELS.get(col_key, col_key)
+            cx    = col_xs[ci] + 12
+            draw.text((cx, header_y), label, font=header_font, fill=header_fill)
+
+        # Divider below header
+        div_y = table_top + P6_COL_HEADER_H - 1
+        draw.line([(table_x0 + 12, div_y), (table_x1 - 12, div_y)],
+                  fill=divider_color, width=1)
+
+        # ── Data rows ─────────────────────────────────────────────────
+        # Adaptive font size based on number of models
+        if n_models <= 4:
+            data_font_size = 22
+        elif n_models <= 6:
+            data_font_size = 20
+        else:
+            data_font_size = 17
+
+        data_font       = load_font_regular(data_font_size)
+        model_name_font = load_font_bold(data_font_size)
+        data_top        = table_top + P6_COL_HEADER_H
+
+        for ri, m in enumerate(specs_data):
+            ry = data_top + ri * row_h
+            text_y = ry + (row_h - data_font_size) // 2
+
+            for ci, col_key in enumerate(all_cols):
+                val = m.get(col_key, "—")
+                cx  = col_xs[ci] + 12
+                # MODEL column uses bold font
+                f = model_name_font if ci == 0 else data_font
+                # Truncate if too wide
+                col_w_avail = (col_xs[ci + 1] if ci + 1 < n_cols else table_x1) - col_xs[ci] - 20
+                tw, _ = text_size(draw, val, f)
+                if tw > col_w_avail and len(val) > 4:
+                    while tw > col_w_avail and len(val) > 4:
+                        val = val[:-1]
+                        tw, _ = text_size(draw, val + "…", f)
+                    val = val + "…"
+                draw.text((cx, text_y), val, font=f, fill=value_fill)
+
+            # Row divider (not after last row)
+            if ri < n_models - 1:
+                rd_y = ry + row_h - 1
+                draw.line([(table_x0 + 12, rd_y), (table_x1 - 12, rd_y)],
+                          fill=divider_color, width=1)
+
+    # ── Draw chip bar ─────────────────────────────────────────────────
+    if chip_groups:
+        cur_x = (W - total_chips_w) // 2
+        for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
+            if icon:
+                icon_y = chip_y_center - ICON_SIZE // 2
+                canvas.alpha_composite(icon, (cur_x, icon_y))
+                draw   = ImageDraw.Draw(canvas)
+                text_x = cur_x + icon_w + ICON_TEXT_GAP
+            else:
+                text_x = cur_x
+            bbox   = draw.textbbox((0, 0), c, font=chip_font)
+            text_h = bbox[3] - bbox[1]
+            text_y = chip_y_center - text_h // 2 - bbox[1]
+            draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
+            cur_x += gw
+            if idx < len(chip_groups) - 1:
+                div_x     = cur_x + CHIP_GAP_X // 2
+                div_y_top = chip_y_center - int(chip_row_h * 0.35)
+                div_y_bot = chip_y_center + int(chip_row_h * 0.35)
+                draw.line([(div_x, div_y_top), (div_x, div_y_bot)],
+                          fill=divider_color, width=DIVIDER_WIDTH)
+                cur_x += CHIP_GAP_X + DIVIDER_WIDTH
+
+    # ── Output ────────────────────────────────────────────────────────
     out = BytesIO()
     canvas.convert("RGB").save(out, format="PNG", optimize=True)
     return out.getvalue()
@@ -1601,40 +1723,44 @@ def _render_p6(
 
 @app.get("/render/p6")
 def render_p6(
-    size_min_key:    str = Query(...),
-    size_max_key:    str = Query(...),
-    group:           str = Query("A"),
-    brand:           str = Query(""),
-    model:           str = Query(""),
-    theme:           str = Query("grey"),
-    size_min_label:  str = Query(""),
-    size_max_label:  str = Query(""),
-    size_min_weight: str = Query(""),
-    size_max_weight: str = Query(""),
-    compare_note:    str = Query(""),
-    badge:           str = Query(""),
+    product_key:  str = Query(""),
+    group:        str = Query("A"),
+    brand:        str = Query(""),
+    model:        str = Query(""),
+    theme:        str = Query("grey"),
+    chip1:        str = Query(""),
+    chip2:        str = Query(""),
+    chip3:        str = Query(""),
+    specs_paste:  str = Query(""),
 ):
     """
-    P6 — Size Comparison card.
-    Shows min and max size variants side-by-side at accurate relative scale
-    derived from alpha bounding-box heights. Clamp: 0.55 ≤ ratio ≤ 0.92.
+    P6 — Specs Comparison Table.
+    Parses specs_paste text (multi-model specs from seller page) into a
+    structured comparison table with ghost reel watermark.
+    If specs_paste is empty, renders a "NO SPECS DATA" fallback card.
     """
     import traceback
-    min_hero, slot_min = _load_p6_hero(size_min_key, group)
-    max_hero, slot_max = _load_p6_hero(size_max_key, group)
+
+    # Parse specs text
+    specs_data = _parse_specs_paste(specs_paste)
+
+    # Load optional ghost watermark (same as P8 — never raises)
+    watermark_img, slot_used = None, ""
+    if product_key:
+        watermark_img, slot_used = _load_p8_watermark(product_key, group)
+
     try:
         png = _render_p6(
-            min_hero, max_hero, slot_min, slot_max, theme,
-            brand, model,
-            size_min_label, size_max_label,
-            size_min_weight, size_max_weight,
-            compare_note, badge,
+            watermark_img, slot_used, theme,
+            brand, model, chip1, chip2, chip3,
+            specs_data,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"P6 render error: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500,
+                            detail=f"P6 render error: {e}\n{traceback.format_exc()}")
     return Response(content=png, media_type="image/png",
-                    headers={"X-Used-Slot-Min": slot_min,
-                             "X-Used-Slot-Max": slot_max})
+                    headers={"X-Specs-Models": str(len(specs_data)),
+                             "X-Watermark-Slot": slot_used})
 
 
 # =====================================================================
