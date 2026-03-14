@@ -17,7 +17,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-14a"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-14b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1395,44 +1395,93 @@ P6_COL_LABELS = {
     "DRAG":   "DRAG",
 }
 
-# Aliases for parsing — seller pages use many different labels
+# Aliases for colon/dash parsing — seller pages use many different labels
 _P6_PARSE_ALIASES = {
+    # Ball bearings
     "BALL BEARING":    "BB",
     "BALL BEARINGS":   "BB",
     "BB":              "BB",
     "BEARING":         "BB",
     "BEARINGS":        "BB",
+    # Gear ratio
     "GEAR RATIO":      "RATIO",
     "RATIO":           "RATIO",
+    "RATION":          "RATIO",         # common typo
+    "NISBAH GEAR":     "RATIO",         # Malay
+    # Weight
     "WEIGHT":          "WEIGHT",
     "BODY WEIGHT":     "WEIGHT",
+    "REEL WEIGHT":     "WEIGHT",
     "NET WEIGHT":      "WEIGHT",
     "WT":              "WEIGHT",
+    "BERAT":           "WEIGHT",         # Malay
+    # Max drag
     "MAX DRAG":        "DRAG",
     "DRAG":            "DRAG",
     "DRAG POWER":      "DRAG",
     "DRAG MAX":        "DRAG",
+    # Skip — not rendered
     "PE":              "_SKIP",
     "LINE CAPACITY":   "_SKIP",
     "LINE CAP":        "_SKIP",
     "SPOOL":           "_SKIP",
+    "RETRIEVE PER TURN": "_SKIP",
+    "MONO KAPASITI":   "_SKIP",          # Malay
+    "BRAID KAPASITI":  "_SKIP",          # Malay
+    "KAPASITI":        "_SKIP",          # Malay
+    "KNOB TYPE":       "_SKIP",
+    "BRAID CAPACITY":  "_SKIP",
+    "MONO CAPACITY":   "_SKIP",
+    "BRAID LINE":      "_SKIP",
+    "MONO LINE":       "_SKIP",
 }
+
+# Fuzzy regex patterns for specs with NO separator (e.g. "Weight (g) 312")
+# Each tuple: (compiled regex, canonical key)
+# Regex must match the LABEL portion; group(1) captures the VALUE.
+_P6_FUZZY_PATTERNS = [
+    # Weight — "Weight (g) 312", "Weight 312 Gram"
+    (re.compile(
+        r'(?:weight|berat|reel\s*weight|body\s*weight|net\s*weight|wt)\b'
+        r'(?:\s*\([^)]*\))?\s+'                       # optional (g), (kg) etc.
+        r'(.+)', re.I), "WEIGHT"),
+    # Gear ratio — "Gear ratio 6.2"
+    (re.compile(
+        r'(?:gear\s*ratio|nisbah\s*gear|ratio|ration)\b'
+        r'(?:\s*\([^)]*\))?\s+'
+        r'(.+)', re.I), "RATIO"),
+    # Max drag — "Max drag force 9", "Maximum drag force (Kg) 13"
+    (re.compile(
+        r'(?:max(?:imum)?\s*drag(?:\s*force)?|drag\s*(?:max|power)?)\b'
+        r'(?:\s*\([^)]*\))?\s+'
+        r'(.+)', re.I), "DRAG"),
+    # Ball bearings — "Ball/roller bearing 8/1"
+    (re.compile(
+        r'(?:ball[/\s]*(?:roller\s*)?bear(?:ing|ings)?|bear(?:ing|ings)|bb)\b'
+        r'(?:\s*\([^)]*\))?\s+'
+        r'(.+)', re.I), "BB"),
+    # Skip patterns — "Max line winding length ...", "Line capacity ..."
+    (re.compile(
+        r'(?:line\s*cap|winding|retriev|capacity|kapasiti|knob)', re.I),
+        "_SKIP"),
+]
 
 
 def _parse_specs_paste(raw: str) -> list:
     """Parse multi-model specs text into list of dicts.
 
-    Expected format (from seller pages):
-        MODEL: SLR1000
-        BALL BEARINGS: 5
-        GEAR RATIO: 5.2:1
-        ...
-        MODEL: SLR2000
-        BALL BEARINGS: 5
-        ...
+    Supports multiple seller-page formats:
+      1. Line-per-spec:   MODEL: SLR1000 / BALL BEARINGS: 5 / ...
+      2. Bare model name:  CRZ3000 (no MODEL: prefix, next lines are specs)
+      3. Bullet-separated: BTL IV 1000 \u2022 Ratio : 5.2 \u2022 Weight : 222g
+      4. Circle-separated: Weight (g) 400 \u25cf Gear ratio 6.2 \u25cf ...
+      5. Comma-separated:  Weight (g) 312, Gear ratio 6.2, Max drag 9
+      6. Dash separators:  Gear Ratio - 4.2 (when no colon present)
+      7. No separator:     Weight (g) 312  (fuzzy regex label matching)
+      8. Malay labels:     NISBAH GEAR, BERAT, KAPASITI, etc.
 
     Returns: [{"MODEL": "SLR1000", "BB": "5", "RATIO": "5.2:1", ...}, ...]
-    Each dict has keys: MODEL, BB, RATIO, WEIGHT, DRAG (missing = "—")
+    Each dict has keys: MODEL, BB, RATIO, WEIGHT, DRAG (missing = "\u2014")
     """
     if not raw or not raw.strip():
         return []
@@ -1440,45 +1489,105 @@ def _parse_specs_paste(raw: str) -> list:
     models = []
     current = {}
 
+    # --- Pre-process: split lines on bullets / circles / commas ---
+    segments = []
     for line in raw.strip().splitlines():
         line = line.strip()
         if not line:
             continue
+        # Split on bullet \u2022 or black circle \u25cf
+        if "\u2022" in line or "\u25cf" in line:
+            for part in re.split("[\u2022\u25cf]", line):
+                part = part.strip()
+                if part:
+                    segments.append(part)
+        # Split on ", " (comma-space) when line has 3+ items (spec list)
+        elif ", " in line and line.count(", ") >= 2:
+            for part in line.split(", "):
+                part = part.strip()
+                if part:
+                    segments.append(part)
+        else:
+            segments.append(line)
 
-        # Try to split on first colon
-        if ":" not in line:
+    for seg in segments:
+        # Skip line-capacity detail lines (". 0.25mm / 310m")
+        if seg.startswith("."):
             continue
 
-        label, _, value = line.partition(":")
-        label = label.strip().upper()
-        value = value.strip()
-
-        if not label or not value:
+        # --- Strip trailing parenthetical (supplementary info) ---
+        # e.g. "Pattern 2500 (6.2:1 - Max winding 84cm)" -> "Pattern 2500"
+        core = re.sub(r"\s*\(.*\)\s*$", "", seg).strip()
+        if not core:
             continue
 
-        # Check if this is a MODEL line — starts a new model block
-        if label == "MODEL":
+        # --- 1. Try colon separator ---
+        label = value = None
+        if ":" in core:
+            l, _, v = core.partition(":")
+            l_up = l.strip().upper()
+            v_s = v.strip()
+
+            # Explicit MODEL: prefix
+            if l_up == "MODEL" and v_s:
+                if current:
+                    models.append(current)
+                current = {"MODEL": v_s.upper()}
+                continue
+
+            # Known alias via colon
+            c = _P6_PARSE_ALIASES.get(l_up)
+            if c:
+                if c != "_SKIP" and c in P6_SPEC_KEYS and v_s:
+                    current[c] = v_s
+                continue
+
+        # --- 2. Try dash separator (only if label is a known alias) ---
+        if "-" in core:
+            l, _, v = core.partition("-")
+            l_up = l.strip().upper()
+            if l_up in _P6_PARSE_ALIASES:
+                c = _P6_PARSE_ALIASES[l_up]
+                if c != "_SKIP" and c in P6_SPEC_KEYS:
+                    current[c] = v.strip()
+                continue
+
+        # --- 3. Fuzzy regex matching (no separator needed) ---
+        # For specs like "Weight (g) 312", "Ball/roller bearing 8/1"
+        fuzzy_matched = False
+        for pat, fcanon in _P6_FUZZY_PATTERNS:
+            m = pat.search(core)
+            if m:
+                fuzzy_matched = True
+                if fcanon != "_SKIP" and fcanon in P6_SPEC_KEYS:
+                    val = m.group(1).strip() if m.lastindex else ""
+                    if val:
+                        current[fcanon] = val
+                break
+        if fuzzy_matched:
+            continue
+
+        # --- 4. Bare model name ---
+        # Strip trailing colon (e.g. "Pattern 4500:")
+        candidate = core.rstrip(":").strip().upper()
+        if (1 < len(candidate) <= 50
+                and any(c.isalpha() for c in candidate)
+                and "SPECIFICATION" not in candidate):
             if current:
                 models.append(current)
-            current = {"MODEL": value.upper()}
-            continue
-
-        # Map alias to canonical key
-        canon = _P6_PARSE_ALIASES.get(label)
-        if canon and canon != "_SKIP" and canon in P6_SPEC_KEYS:
-            current[canon] = value
+            current = {"MODEL": candidate}
 
     # Don't forget the last model
     if current:
         models.append(current)
 
-    # Fill missing specs with "—"
+    # Fill missing specs with "\u2014"
     for m in models:
         for k in P6_SPEC_KEYS:
             if k not in m:
-                m[k] = "—"
+                m[k] = "\u2014"
         if "MODEL" not in m:
-            m["MODEL"] = "—"
+            m["MODEL"] = "\u2014"
 
     return models
 
