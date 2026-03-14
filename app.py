@@ -1412,6 +1412,7 @@ _P6_PARSE_ALIASES = {
     "WEIGHT":          "WEIGHT",
     "BODY WEIGHT":     "WEIGHT",
     "REEL WEIGHT":     "WEIGHT",
+    "REEL WT":         "WEIGHT",
     "NET WEIGHT":      "WEIGHT",
     "WT":              "WEIGHT",
     "BERAT":           "WEIGHT",         # Malay
@@ -1420,6 +1421,7 @@ _P6_PARSE_ALIASES = {
     "DRAG":            "DRAG",
     "DRAG POWER":      "DRAG",
     "DRAG MAX":        "DRAG",
+    "HANDLING POWER":  "DRAG",
     # Skip — not rendered
     "PE":              "_SKIP",
     "LINE CAPACITY":   "_SKIP",
@@ -1515,9 +1517,15 @@ def _parse_specs_paste(raw: str) -> list:
         if seg.startswith("."):
             continue
 
+        # --- Strip leading dash prefix ("- GEAR RATIO:" or "-BALL BEARING:") ---
+        # Only strip if segment contains a colon (spec line), not for feature bullets
+        core = seg
+        if re.match(r"^-\s*", seg) and ":" in seg:
+            core = re.sub(r"^-\s*", "", seg).strip()
+
         # --- Strip trailing parenthetical (supplementary info) ---
         # e.g. "Pattern 2500 (6.2:1 - Max winding 84cm)" -> "Pattern 2500"
-        core = re.sub(r"\s*\(.*\)\s*$", "", seg).strip()
+        core = re.sub(r"\s*\(.*\)\s*$", "", core).strip()
         if not core:
             continue
 
@@ -1570,9 +1578,19 @@ def _parse_specs_paste(raw: str) -> list:
         # --- 4. Bare model name ---
         # Strip trailing colon (e.g. "Pattern 4500:")
         candidate = core.rstrip(":").strip().upper()
+        # Filter out section headers, feature bullets, marketing text
+        _NOISE_EXACT = {"FEATURES", "FEATURE", "SPECIFICATIONS", "SPECS",
+                        "SPEC", "DESCRIPTION", "DETAILS", "OVERVIEW",
+                        "HIGHLIGHTS", "STANDARD", "OPTIONAL", "INCLUDED",
+                        "ACCESSORIES"}
+        _NOISE_WORDS = {"SPINNING REEL", "FISHING REEL", "BAITCASTING",
+                        "BAITCAST REEL"}
         if (1 < len(candidate) <= 50
                 and any(c.isalpha() for c in candidate)
-                and "SPECIFICATION" not in candidate):
+                and not candidate.startswith("-")
+                and "SPECIFICATION" not in candidate
+                and candidate not in _NOISE_EXACT
+                and not any(nw in candidate for nw in _NOISE_WORDS)):
             if current:
                 models.append(current)
             current = {"MODEL": candidate}
