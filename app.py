@@ -17,7 +17,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-15a"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-16a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1374,12 +1374,12 @@ def render_p5(
 # Falls back to "NO SPECS DATA" message when specs_paste is empty.
 # =====================================================================
 
-P6_TAG_PAD_X       = 14
-P6_TAG_PAD_Y       = 7
-P6_TABLE_PAD       = 48     # left/right padding inside card
-P6_TABLE_TOP       = 180    # y where table starts (below header)
-P6_COL_HEADER_H    = 44     # height of column header row
-P6_DATA_ROW_H      = 40     # height of each data row
+P6_TAG_PAD_X       = 16
+P6_TAG_PAD_Y       = 9
+P6_TABLE_PAD       = 40     # left/right padding inside card
+P6_TABLE_TOP       = 165    # y where table starts (below header)
+P6_COL_HEADER_H    = 48     # height of column header row
+P6_DATA_ROW_H      = 46     # height of each data row
 P6_TABLE_RADIUS    = 14     # corner radius of table background pill
 P6_WATERMARK_ALPHA = 28     # ghost reel alpha (~11% of 255)
 P6_WATERMARK_BLUR  = 10     # GaussianBlur radius for ghost effect
@@ -1701,12 +1701,17 @@ def _render_p6(
     pill_font = load_font_bold(22)
     pill_text = "FULL SPECS"
     pw, ph    = text_size(draw, pill_text, pill_font)
-    pill_x    = W - pad - pw - P6_TAG_PAD_X * 2
-    pill_y    = top_pad + 8
-    pill_rect = [pill_x - P6_TAG_PAD_X, pill_y - P6_TAG_PAD_Y,
-                 pill_x + pw + P6_TAG_PAD_X, pill_y + ph + P6_TAG_PAD_Y]
+    # Build pill rect from right edge
+    pill_r    = W - pad
+    pill_l    = pill_r - pw - P6_TAG_PAD_X * 2
+    pill_t    = top_pad + 8
+    pill_b    = pill_t + ph + P6_TAG_PAD_Y * 2
+    pill_rect = [pill_l, pill_t, pill_r, pill_b]
     draw.rounded_rectangle(pill_rect, radius=20, outline=text_color[:3], width=2)
-    draw.text((pill_x, pill_y), pill_text, font=pill_font, fill=text_color)
+    # Centre text inside pill using anchor='mm'
+    pill_cx   = (pill_l + pill_r) // 2
+    pill_cy   = (pill_t + pill_b) // 2
+    draw.text((pill_cx, pill_cy), pill_text, font=pill_font, fill=text_color, anchor='mm')
 
     # ── Chip bar (bottom) ─────────────────────────────────────────────
     chip_font  = load_font_bold(32)
@@ -1781,8 +1786,8 @@ def _render_p6(
         value_fill  = text_color
 
         # ── Column header row ─────────────────────────────────────────
-        header_font = load_font_bold(18)
-        header_y    = table_top + (P6_COL_HEADER_H - 18) // 2
+        header_font = load_font_bold(20)
+        header_y    = table_top + (P6_COL_HEADER_H - 20) // 2
 
         for ci, col_key in enumerate(all_cols):
             label = P6_COL_LABELS.get(col_key, col_key)
@@ -1797,11 +1802,11 @@ def _render_p6(
         # ── Data rows ─────────────────────────────────────────────────
         # Adaptive font size based on number of models
         if n_models <= 4:
-            data_font_size = 22
+            data_font_size = 26
         elif n_models <= 6:
-            data_font_size = 20
+            data_font_size = 23
         else:
-            data_font_size = 17
+            data_font_size = 19
 
         data_font       = load_font_regular(data_font_size)
         model_name_font = load_font_bold(data_font_size)
