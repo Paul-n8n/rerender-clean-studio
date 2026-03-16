@@ -17,7 +17,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-16a"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-16b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1085,11 +1085,13 @@ def _render_p4(
     draw = ImageDraw.Draw(canvas)
 
     # ── Brand + model header ──────────────────────────────────────────
-    draw_text_align_left(draw, pad, top_pad,               brand_text, brand_font, text_color)
-    draw_text_align_left(draw, pad, top_pad + brand_h - 4, model_text, model_font, text_color)
+    model_y = top_pad + brand_h - 4
+    draw_text_align_left(draw, pad, top_pad,   brand_text, brand_font, text_color)
+    draw_text_align_left(draw, pad, model_y,   model_text, model_font, text_color)
 
-    # Thin separator line below model
-    sep_y   = top_pad + brand_h - 4 + model_h + 10
+    # Thin separator line below model — use bbox[3] for actual bottom
+    _model_bbox = draw.textbbox((pad, model_y), model_text, font=model_font)
+    sep_y   = _model_bbox[3] + 14
     sep_end = int(W * P4_TEXT_W_FRAC) - 10
     sep_col = (text_color[0], text_color[1], text_color[2], 70)
     draw.line([(pad, sep_y), (sep_end, sep_y)], fill=sep_col, width=2)
