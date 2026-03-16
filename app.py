@@ -17,7 +17,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-16b"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-16c"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -1093,7 +1093,7 @@ def _render_p4(
     _model_bbox = draw.textbbox((pad, model_y), model_text, font=model_font)
     sep_y   = _model_bbox[3] + 14
     sep_end = int(W * P4_TEXT_W_FRAC) - 10
-    sep_col = (text_color[0], text_color[1], text_color[2], 70)
+    sep_col = (text_color[0], text_color[1], text_color[2], 180)
     draw.line([(pad, sep_y), (sep_end, sep_y)], fill=sep_col, width=2)
 
     # ── Feature block ─────────────────────────────────────────────────
