@@ -433,10 +433,10 @@ async def upload_to_r2(key: str = Query(...), file: UploadFile = File(...)):
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # Validate it's an image
+    # Validate it's an image (just check PIL can open it)
     try:
         img = Image.open(BytesIO(data))
-        img.verify()
+        img.load()  # force decode without verify() which can reject valid JPEGs
     except Exception:
         raise HTTPException(status_code=400, detail="Not a valid image file")
 
