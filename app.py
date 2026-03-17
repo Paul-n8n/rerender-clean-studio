@@ -446,14 +446,361 @@ async def upload_to_r2(key: str = Query(...), file: UploadFile = File(...)):
     return {"ok": True, "key": key, "size": len(data)}
 
 
+import math
+import random
+
+
+# ======================== VIDEO FRAME BACKGROUND PRESETS ========================
+
+def _lerp_color(c1, c2, t):
+    """Linearly interpolate between two RGB tuples."""
+    return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))
+
+
+def _vertical_gradient(draw, w, h, color_top, color_bot):
+    """Draw a vertical gradient from top color to bottom color."""
+    for y in range(h):
+        t = y / max(h - 1, 1)
+        c = _lerp_color(color_top, color_bot, t)
+        draw.line([(0, y), (w, y)], fill=c)
+
+
+def _radial_gradient(draw, w, h, color_center, color_edge):
+    """Draw a radial gradient from center color to edge color."""
+    cx, cy = w // 2, h // 2
+    max_dist = (cx ** 2 + cy ** 2) ** 0.5
+    for y in range(0, h, 2):
+        for x in range(0, w, 2):
+            dist = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+            t = min(1.0, dist / max_dist)
+            c = _lerp_color(color_center, color_edge, t)
+            draw.rectangle([x, y, x + 1, y + 1], fill=c)
+
+
+def _diagonal_band(draw, w, h, bg_color, band_color, band_width=200):
+    """Draw a diagonal color band across the canvas."""
+    _vertical_gradient(draw, w, h, bg_color, bg_color)
+    mid = w // 2
+    for y in range(h):
+        x_center = int(mid + (y - h // 2) * 0.6)
+        for x in range(max(0, x_center - band_width // 2), min(w, x_center + band_width // 2)):
+            dist = abs(x - x_center) / (band_width // 2)
+            t = max(0, 1.0 - dist)
+            c = _lerp_color(bg_color, band_color, t * 0.5)
+            draw.point((x, y), fill=c)
+
+
+def _add_bokeh(img, count=15, min_r=8, max_r=40, color=(255, 255, 255), max_alpha=40):
+    """Add random soft bokeh circles."""
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    w, h = img.size
+    for _ in range(count):
+        r = random.randint(min_r, max_r)
+        cx = random.randint(r, w - r)
+        cy = random.randint(r, h - r)
+        alpha = random.randint(max_alpha // 3, max_alpha)
+        odraw.ellipse([cx - r, cy - r, cx + r, cy + r],
+                      fill=(*color, alpha))
+    # Blur the bokeh
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=6))
+    img.paste(overlay, (0, 0), overlay)
+
+
+def _add_horizontal_bands(img, count=5, max_alpha=25):
+    """Add subtle horizontal smoke/haze bands."""
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    w, h = img.size
+    for _ in range(count):
+        y = random.randint(0, h)
+        band_h = random.randint(40, 120)
+        alpha = random.randint(8, max_alpha)
+        odraw.rectangle([0, y, w, y + band_h], fill=(180, 180, 180, alpha))
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=20))
+    img.paste(overlay, (0, 0), overlay)
+
+
+def _add_hex_pattern(draw, w, h, color, alpha_val=20):
+    """Add subtle honeycomb hex pattern."""
+    hex_size = 60
+    for row in range(0, h + hex_size, hex_size):
+        offset = hex_size // 2 if (row // hex_size) % 2 else 0
+        for col in range(0, w + hex_size, hex_size):
+            cx = col + offset
+            cy = row
+            points = []
+            for i in range(6):
+                angle = math.pi / 3 * i + math.pi / 6
+                px = cx + int(hex_size * 0.4 * math.cos(angle))
+                py = cy + int(hex_size * 0.4 * math.sin(angle))
+                points.append((px, py))
+            draw.polygon(points, outline=(*color, alpha_val))
+
+
+def _add_line_texture(draw, w, h, color, spacing=4, alpha_val=15):
+    """Add directional fine line texture (brushed metal effect)."""
+    for y in range(0, h, spacing):
+        offset = random.randint(-1, 1)
+        c = tuple(min(255, v + random.randint(-5, 5)) for v in color)
+        draw.line([(0, y + offset), (w, y + offset)], fill=(*c, alpha_val))
+
+
+def _add_noise_texture(draw, w, h, base_color, strength=15):
+    """Add subtle noise/grain texture."""
+    for y in range(0, h, 3):
+        for x in range(0, w, 3):
+            noise = random.randint(-strength, strength)
+            c = tuple(max(0, min(255, v + noise)) for v in base_color)
+            draw.rectangle([x, y, x + 2, y + 2], fill=(*c, 255))
+
+
+def _build_video_bg(style: str, w: int, h: int, theme: str = "teal") -> Image.Image:
+    """Build a background image for the given style preset."""
+    bg = Image.new("RGBA", (w, h), (0, 0, 0, 255))
+    draw = ImageDraw.Draw(bg)
+
+    # Theme accent colors
+    theme_accents = {
+        "teal": (0, 180, 180), "navy": (30, 60, 120), "yellow": (200, 170, 40),
+        "grey": (120, 120, 120), "gold": (200, 170, 40), "red": (180, 40, 40),
+    }
+    accent = theme_accents.get(theme, (0, 180, 180))
+
+    # ---- STUDIO STYLES ----
+    if style == "studio_dark":
+        for y in range(h):
+            t = abs(y - h // 2) / (h // 2)
+            v = int(45 - 27 * t)
+            draw.line([(0, y), (w, y)], fill=(v, v, v + 2))
+
+    elif style == "studio_white":
+        for y in range(h):
+            t = abs(y - h // 2) / (h // 2)
+            v = int(240 - 40 * t)
+            draw.line([(0, y), (w, y)], fill=(v, v, v))
+
+    elif style == "studio_spotlight":
+        bg = Image.new("RGBA", (w, h), (12, 12, 14, 255))
+        draw = ImageDraw.Draw(bg)
+        _radial_gradient(draw, w, h, (70, 70, 72), (12, 12, 14))
+
+    elif style == "studio_split":
+        for y in range(h):
+            for x in range(0, w, 2):
+                if x < w // 2:
+                    v = int(18 + 10 * (x / (w // 2)))
+                else:
+                    v = int(55 - 30 * ((x - w // 2) / (w // 2)))
+                draw.rectangle([x, y, x + 1, y], fill=(v, v, v + 1))
+
+    elif style == "studio_warm":
+        _vertical_gradient(draw, w, h, (55, 40, 25), (25, 18, 12))
+
+    elif style == "studio_cool":
+        _vertical_gradient(draw, w, h, (25, 35, 55), (12, 16, 28))
+
+    # ---- NATURE-INSPIRED ----
+    elif style == "sunset_ocean":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.3:
+                c = _lerp_color((180, 90, 30), (140, 50, 80), t / 0.3)
+            elif t < 0.6:
+                c = _lerp_color((140, 50, 80), (50, 20, 60), (t - 0.3) / 0.3)
+            else:
+                c = _lerp_color((50, 20, 60), (15, 10, 20), (t - 0.6) / 0.4)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "dawn_mist":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((160, 120, 140), (130, 150, 170), t / 0.4)
+            else:
+                c = _lerp_color((130, 150, 170), (60, 65, 75), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+        _add_horizontal_bands(bg, count=4, max_alpha=20)
+
+    elif style == "golden_hour":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.5:
+                c = _lerp_color((200, 150, 50), (160, 100, 30), t / 0.5)
+            else:
+                c = _lerp_color((160, 100, 30), (30, 20, 10), (t - 0.5) / 0.5)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "storm_sea":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            c = _lerp_color((30, 55, 65), (12, 15, 18), t)
+            draw.line([(0, y), (w, y)], fill=c)
+        _add_horizontal_bands(bg, count=6, max_alpha=18)
+
+    elif style == "tropical_coast":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.5:
+                c = _lerp_color((0, 180, 170), (0, 100, 140), t / 0.5)
+            else:
+                c = _lerp_color((0, 100, 140), (10, 25, 50), (t - 0.5) / 0.5)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "forest_canopy":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((20, 60, 20), (15, 80, 30), t / 0.4)
+            else:
+                c = _lerp_color((15, 80, 30), (8, 15, 8), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "volcanic":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.3:
+                c = _lerp_color((120, 30, 10), (180, 80, 15), t / 0.3)
+            elif t < 0.6:
+                c = _lerp_color((180, 80, 15), (80, 25, 8), (t - 0.3) / 0.3)
+            else:
+                c = _lerp_color((80, 25, 8), (15, 8, 5), (t - 0.6) / 0.4)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "arctic":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.5:
+                c = _lerp_color((180, 210, 230), (210, 225, 235), t / 0.5)
+            else:
+                c = _lerp_color((210, 225, 235), (150, 170, 190), (t - 0.5) / 0.5)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    # ---- ABSTRACT/CREATIVE ----
+    elif style == "neon_glow":
+        bg = Image.new("RGBA", (w, h), (10, 10, 12, 255))
+        draw = ImageDraw.Draw(bg)
+        # Neon accent glow on edges
+        glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        gdraw = ImageDraw.Draw(glow)
+        for i in range(80):
+            alpha = int(40 * (1 - i / 80))
+            gdraw.rectangle([i, i, w - i, h - i],
+                            outline=(*accent, alpha))
+        glow = glow.filter(ImageFilter.GaussianBlur(radius=10))
+        bg.paste(glow, (0, 0), glow)
+
+    elif style == "smoke_noir":
+        _vertical_gradient(draw, w, h, (25, 25, 28), (10, 10, 12))
+        _add_horizontal_bands(bg, count=8, max_alpha=30)
+
+    elif style == "bokeh_night":
+        _vertical_gradient(draw, w, h, (15, 15, 25), (8, 8, 12))
+        _add_bokeh(bg, count=25, min_r=5, max_r=35,
+                   color=accent, max_alpha=35)
+        _add_bokeh(bg, count=10, min_r=15, max_r=50,
+                   color=(255, 255, 255), max_alpha=20)
+
+    elif style == "gradient_diagonal":
+        _diagonal_band(draw, w, h, (15, 15, 18), accent, band_width=300)
+
+    elif style == "copper_rust":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((180, 120, 70), (150, 90, 50), t / 0.4)
+            else:
+                c = _lerp_color((150, 90, 50), (30, 18, 10), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "deep_space":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            c = _lerp_color((12, 8, 25), (5, 3, 12), t)
+            draw.line([(0, y), (w, y)], fill=c)
+        _add_bokeh(bg, count=30, min_r=1, max_r=3,
+                   color=(200, 200, 255), max_alpha=60)
+
+    elif style == "chrome":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            cycle = abs(math.sin(t * math.pi * 2))
+            v = int(100 + 70 * cycle)
+            draw.line([(0, y), (w, y)], fill=(v, v, v + 5))
+
+    elif style == "velvet":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.5:
+                c = _lerp_color((45, 15, 60), (60, 20, 80), t / 0.5)
+            else:
+                c = _lerp_color((60, 20, 80), (12, 5, 18), (t - 0.5) / 0.5)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    # ---- DYNAMIC/PATTERN ----
+    elif style == "water_caustics":
+        bg = Image.new("RGBA", (w, h), (12, 20, 30, 255))
+        draw = ImageDraw.Draw(bg)
+        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        odraw = ImageDraw.Draw(overlay)
+        for _ in range(40):
+            cx = random.randint(0, w)
+            cy = random.randint(0, h)
+            rx = random.randint(30, 120)
+            ry = random.randint(20, 80)
+            alpha = random.randint(8, 22)
+            odraw.ellipse([cx - rx, cy - ry, cx + rx, cy + ry],
+                          fill=(140, 200, 220, alpha))
+        overlay = overlay.filter(ImageFilter.GaussianBlur(radius=15))
+        bg.paste(overlay, (0, 0), overlay)
+
+    elif style == "honeycomb":
+        bg = Image.new("RGBA", (w, h), (18, 18, 20, 255))
+        draw = ImageDraw.Draw(bg)
+        _add_hex_pattern(draw, w, h, accent, alpha_val=25)
+
+    elif style == "brushed_metal":
+        bg = Image.new("RGBA", (w, h), (45, 45, 48, 255))
+        draw = ImageDraw.Draw(bg)
+        _add_line_texture(draw, w, h, (55, 55, 58), spacing=3, alpha_val=20)
+
+    elif style == "concrete":
+        bg = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(bg)
+        _add_noise_texture(draw, w, h, (50, 48, 46), strength=12)
+
+    else:
+        # Default: studio_dark
+        for y in range(h):
+            t = abs(y - h // 2) / (h // 2)
+            v = int(45 - 27 * t)
+            draw.line([(0, y), (w, y)], fill=(v, v, v + 2))
+
+    return bg
+
+
+# All available background styles
+VIDEO_BG_STYLES = [
+    "studio_dark", "studio_white", "studio_spotlight", "studio_split",
+    "studio_warm", "studio_cool",
+    "sunset_ocean", "dawn_mist", "golden_hour", "storm_sea",
+    "tropical_coast", "forest_canopy", "volcanic", "arctic",
+    "neon_glow", "smoke_noir", "bokeh_night", "gradient_diagonal",
+    "copper_rust", "deep_space", "chrome", "velvet",
+    "water_caustics", "honeycomb", "brushed_metal", "concrete",
+]
+
+
 @app.get("/prep-video-frame")
 async def prep_video_frame(
     image_url: str = Query(..., description="URL of transparent PNG cutout"),
     save_key: str = Query(None, description="Optional R2 key to save result"),
+    style: str = Query("studio_dark", description="Background style preset"),
+    theme: str = Query("teal", description="Theme color for accent-based styles"),
     width: int = Query(1080, description="Output width"),
     height: int = Query(1920, description="Output height (9:16 default)"),
 ):
-    """Download a transparent PNG cutout, composite onto dark studio gradient, return/save result."""
+    """Download a transparent PNG cutout, composite onto styled background, return/save result."""
     # Download the cutout image
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.get(image_url)
@@ -462,16 +809,8 @@ async def prep_video_frame(
 
     cutout = Image.open(BytesIO(resp.content)).convert("RGBA")
 
-    # Create dark studio gradient background using vertical gradient (fast)
-    bg = Image.new("RGB", (width, height), (18, 18, 20))
-    draw = ImageDraw.Draw(bg)
-    # Vertical gradient: slightly lighter in the middle third
-    for y in range(height):
-        # Parabolic: brighter at center, darker at top/bottom
-        t = abs(y - height // 2) / (height // 2)  # 0 at center, 1 at edges
-        v = int(45 - 27 * t)  # center ~45, edges ~18
-        draw.line([(0, y), (width, y)], fill=(v, v, v + 2))
-    bg = bg.convert("RGBA")
+    # Build the background
+    bg = _build_video_bg(style, width, height, theme)
 
     # Scale cutout to fit ~70% of frame height, maintain aspect ratio
     cw, ch = cutout.size
@@ -487,10 +826,10 @@ async def prep_video_frame(
     paste_y = (height - new_h) // 2
     bg.paste(cutout_resized, (paste_x, paste_y), cutout_resized)
 
-    # Add subtle reflection below product
-    if paste_y + new_h < height - 50:
+    # Add subtle reflection below product (skip for bright/white styles)
+    skip_reflection = style in ("studio_white", "arctic", "chrome")
+    if not skip_reflection and paste_y + new_h < height - 50:
         reflection = cutout_resized.transpose(Image.FLIP_TOP_BOTTOM)
-        # Fade reflection
         r_alpha = reflection.split()[3]
         r_alpha = r_alpha.point(lambda p: int(p * 0.15))
         reflection.putalpha(r_alpha)
@@ -516,6 +855,12 @@ async def prep_video_frame(
     out = BytesIO()
     final.save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
+
+
+@app.get("/video-bg-styles")
+def list_video_bg_styles():
+    """List all available background styles for /prep-video-frame."""
+    return {"styles": VIDEO_BG_STYLES, "count": len(VIDEO_BG_STYLES)}
 
 
 def load_bg(theme: str):
