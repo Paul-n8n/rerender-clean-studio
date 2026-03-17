@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import boto3
 from botocore.config import Config
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -420,6 +420,31 @@ def get_image(key: str):
     out = BytesIO()
     hero.save(out, format="PNG")
     return Response(content=out.getvalue(), media_type="image/png")
+
+
+@app.post("/r2/upload")
+async def upload_to_r2(key: str = Query(...), file: UploadFile = File(...)):
+    """Upload an image to R2 at the given key path."""
+    bucket = os.environ.get("R2_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    # Validate it's an image
+    try:
+        img = Image.open(BytesIO(data))
+        img.verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Not a valid image file")
+
+    s3 = r2_client()
+    content_type = file.content_type or "image/png"
+    s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType=content_type)
+
+    return {"ok": True, "key": key, "size": len(data)}
 
 
 def load_bg(theme: str):
