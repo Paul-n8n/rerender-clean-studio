@@ -433,12 +433,10 @@ async def upload_to_r2(key: str = Query(...), file: UploadFile = File(...)):
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # Validate it's an image (just check PIL can open it)
-    try:
-        img = Image.open(BytesIO(data))
-        img.load()  # force decode without verify() which can reject valid JPEGs
-    except Exception:
-        raise HTTPException(status_code=400, detail="Not a valid image file")
+    # Quick magic-byte check (skip full PIL decode to avoid blocking)
+    if data[:2] not in (b'\xff\xd8', b'\x89P') and data[:4] != b'RIFF':
+        # Not JPEG, PNG, or WebP
+        raise HTTPException(status_code=400, detail="Not a valid image file (expected JPEG/PNG/WebP)")
 
     s3 = r2_client()
     content_type = file.content_type or "image/png"
