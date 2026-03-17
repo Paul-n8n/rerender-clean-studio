@@ -1,5 +1,6 @@
 import os
 import re
+import httpx
 from io import BytesIO
 from typing import List, Optional
 
@@ -443,6 +444,78 @@ async def upload_to_r2(key: str = Query(...), file: UploadFile = File(...)):
     s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType=content_type)
 
     return {"ok": True, "key": key, "size": len(data)}
+
+
+@app.get("/prep-video-frame")
+async def prep_video_frame(
+    image_url: str = Query(..., description="URL of transparent PNG cutout"),
+    save_key: str = Query(None, description="Optional R2 key to save result"),
+    width: int = Query(1080, description="Output width"),
+    height: int = Query(1920, description="Output height (9:16 default)"),
+):
+    """Download a transparent PNG cutout, composite onto dark studio gradient, return/save result."""
+    # Download the cutout image
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.get(image_url)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Failed to download image: HTTP {resp.status_code}")
+
+    cutout = Image.open(BytesIO(resp.content)).convert("RGBA")
+
+    # Create dark studio gradient background using vertical gradient (fast)
+    bg = Image.new("RGB", (width, height), (18, 18, 20))
+    draw = ImageDraw.Draw(bg)
+    # Vertical gradient: slightly lighter in the middle third
+    for y in range(height):
+        # Parabolic: brighter at center, darker at top/bottom
+        t = abs(y - height // 2) / (height // 2)  # 0 at center, 1 at edges
+        v = int(45 - 27 * t)  # center ~45, edges ~18
+        draw.line([(0, y), (width, y)], fill=(v, v, v + 2))
+    bg = bg.convert("RGBA")
+
+    # Scale cutout to fit ~70% of frame height, maintain aspect ratio
+    cw, ch = cutout.size
+    target_h = int(height * 0.70)
+    target_w = int(width * 0.85)
+    scale = min(target_w / cw, target_h / ch)
+    new_w = int(cw * scale)
+    new_h = int(ch * scale)
+    cutout_resized = cutout.resize((new_w, new_h), Image.LANCZOS)
+
+    # Center the cutout on the canvas
+    paste_x = (width - new_w) // 2
+    paste_y = (height - new_h) // 2
+    bg.paste(cutout_resized, (paste_x, paste_y), cutout_resized)
+
+    # Add subtle reflection below product
+    if paste_y + new_h < height - 50:
+        reflection = cutout_resized.transpose(Image.FLIP_TOP_BOTTOM)
+        # Fade reflection
+        r_alpha = reflection.split()[3]
+        r_alpha = r_alpha.point(lambda p: int(p * 0.15))
+        reflection.putalpha(r_alpha)
+        ref_y = paste_y + new_h + 5
+        if ref_y + new_h > height:
+            crop_h = height - ref_y
+            reflection = reflection.crop((0, 0, new_w, crop_h))
+        bg.paste(reflection, (paste_x, ref_y), reflection)
+
+    # Convert to RGB for output
+    final = bg.convert("RGB")
+
+    # Save to R2 if key provided
+    if save_key:
+        out_buf = BytesIO()
+        final.save(out_buf, format="PNG", quality=95)
+        out_buf.seek(0)
+        s3 = r2_client()
+        bucket = os.environ.get("R2_BUCKET")
+        s3.put_object(Bucket=bucket, Key=save_key, Body=out_buf.getvalue(), ContentType="image/png")
+
+    # Return the image
+    out = BytesIO()
+    final.save(out, format="PNG")
+    return Response(content=out.getvalue(), media_type="image/png")
 
 
 def load_bg(theme: str):
