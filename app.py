@@ -555,6 +555,77 @@ def _add_noise_texture(draw, w, h, base_color, strength=15):
             draw.rectangle([x, y, x + 2, y + 2], fill=(*c, 255))
 
 
+SCENIC_PROMPTS = {
+    "sunset_ocean": "Dramatic golden orange and purple sunset over calm Malaysian ocean, fishing boat silhouette in distance, soft warm light, product photography backdrop, no text, 4k",
+    "dawn_mist": "Misty pink and gold dawn over a Malaysian river, soft morning light filtering through haze, dreamy atmosphere, product photography backdrop, no text, 4k",
+    "golden_hour": "Rich golden hour sunlight streaming over Malaysian coastline, warm amber glow on water, cinematic lighting, product photography backdrop, no text, 4k",
+    "tropical_coast": "Crystal clear turquoise tropical Malaysian waters with white sand beach, bright teal ocean, aerial view, product photography backdrop, no text, 4k",
+    "forest_canopy": "Lush green Malaysian rainforest canopy with dappled sunlight, emerald green leaves, tropical jungle, product photography backdrop, no text, 4k",
+    "mangrove_estuary": "Malaysian mangrove estuary at golden hour, warm olive green water reflecting sunset, fishing kayak, product photography backdrop, no text, 4k",
+    "offshore_terengganu": "Deep cobalt blue waters off Terengganu coast Malaysia, fishing trawler in distance, dramatic sky, product photography backdrop, no text, 4k",
+    "kelong_sunset": "Malaysian wooden kelong fishing platform at sunset, golden orange sky reflected in calm water, traditional fishing structure, product photography backdrop, no text, 4k",
+    "jungle_stream": "Clear jungle stream in Malaysian rainforest, mossy rocks, green ferns, dappled sunlight through canopy, product photography backdrop, no text, 4k",
+    "dam_reservoir": "Calm teal blue Malaysian dam reservoir at sunrise, misty hills in background, peaceful fishing spot, product photography backdrop, no text, 4k",
+    "fishing_pond": "Malaysian freshwater fishing pond at dawn, warm green-brown water, lily pads, morning mist rising, product photography backdrop, no text, 4k",
+    "coral_reef": "Vibrant Malaysian coral reef underwater scene, turquoise water, colorful corals and tropical fish, bright sunlight from above, product photography backdrop, no text, 4k",
+    "seagrass_shallows": "Crystal clear shallow Malaysian waters with seagrass, bright cyan-green, sunlight patterns on sandy bottom, product photography backdrop, no text, 4k",
+    "sandy_bottom": "Golden sand underwater view in clear Malaysian waters, sun rays penetrating water surface, warm sandy tones, product photography backdrop, no text, 4k",
+    "tidal_channel": "Malaysian tidal channel at low tide, exposed sand patterns, turquoise water flowing, aerial perspective, product photography backdrop, no text, 4k",
+    "pelagic_blue": "Deep sapphire blue open ocean, Malaysian deep sea fishing, dramatic clouds on horizon, vast blue water, product photography backdrop, no text, 4k",
+    "current_line": "Ocean current line where two waters meet, deep blue meets turquoise, floating seaweed, Malaysian waters, product photography backdrop, no text, 4k",
+    "neon_glow": "Futuristic neon-lit studio scene, electric cyan and magenta light trails, premium tech product backdrop, dark with vibrant neon accents, no text, 4k",
+    "bokeh_night": "Beautiful colorful bokeh lights at night, warm golden and cool blue circles of light, dreamy out-of-focus city lights, product photography backdrop, no text, 4k",
+    "gradient_diagonal": "Bold warm-to-cool gradient sweep, orange to teal diagonal transition, modern abstract design, clean product photography backdrop, no text, 4k",
+    "copper_rust": "Warm copper and amber abstract textures, metallic rust patina, industrial premium feel, warm orange-brown tones, product photography backdrop, no text, 4k",
+    "velvet": "Rich deep purple and burgundy velvet fabric texture, luxury premium feel, soft folds catching light, product photography backdrop, no text, 4k",
+    "water_caustics": "Bright blue water with light caustic patterns, swimming pool light reflections, vivid aqua blue, product photography backdrop, no text, 4k",
+    "honeycomb": "Golden honeycomb hexagonal pattern with warm amber light, geometric precision, honey dripping, warm golden tones, product photography backdrop, no text, 4k",
+}
+
+
+async def _generate_scenic_bg(style: str, w: int, h: int, client: httpx.AsyncClient) -> Image.Image:
+    """Generate a scenic background using fal.ai text-to-image."""
+    prompt = SCENIC_PROMPTS.get(style, SCENIC_PROMPTS.get("tropical_coast"))
+
+    try:
+        resp = await client.post(
+            "https://fal.run/fal-ai/flux/schnell",
+            headers={"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"},
+            json={
+                "prompt": prompt,
+                "image_size": {"width": w, "height": h},
+                "num_images": 1,
+                "num_inference_steps": 4,
+                "enable_safety_checker": False,
+            },
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            # Fallback to gradient
+            return _build_video_bg(style, w, h, "teal")
+
+        data = resp.json()
+        img_url = data.get("images", [{}])[0].get("url", "")
+        if not img_url:
+            return _build_video_bg(style, w, h, "teal")
+
+        img_resp = await client.get(img_url)
+        if img_resp.status_code != 200:
+            return _build_video_bg(style, w, h, "teal")
+
+        bg = Image.open(BytesIO(img_resp.content)).convert("RGBA")
+        # Resize to exact dimensions if needed
+        if bg.size != (w, h):
+            bg = bg.resize((w, h), Image.LANCZOS)
+
+        # Apply slight blur to push background behind product
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=3))
+        return bg
+
+    except Exception:
+        return _build_video_bg(style, w, h, "teal")
+
+
 def _build_video_bg(style: str, w: int, h: int, theme: str = "teal") -> Image.Image:
     """Build a background image for the given style preset."""
     bg = Image.new("RGBA", (w, h), (0, 0, 0, 255))
@@ -1041,6 +1112,7 @@ async def prep_post_image(
     brand: str = Query("", description="Brand name for text overlay"),
     model: str = Query("", description="Model name for text overlay"),
     size: str = Query("", description="Size info for text overlay"),
+    bg_mode: str = Query("gradient", description="'gradient' (PIL) or 'scenic' (AI-generated background)"),
 ):
     """All-in-one post image: fetch hero from R2 → bg removal via fal.ai → composite on styled background → save to R2.
     Returns JSON with r2_url for the final image."""
@@ -1068,7 +1140,7 @@ async def prep_post_image(
     if not FAL_KEY:
         raise HTTPException(status_code=500, detail="FAL_KEY not configured")
 
-    async with httpx.AsyncClient(timeout=90) as client:
+    async with httpx.AsyncClient(timeout=120) as client:
         fal_resp = await client.post(
             "https://fal.run/fal-ai/birefnet/v2",
             headers={"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"},
@@ -1091,10 +1163,13 @@ async def prep_post_image(
         if cutout_resp.status_code != 200:
             raise HTTPException(status_code=502, detail=f"Failed to download cutout: {cutout_resp.status_code}")
 
-    cutout = Image.open(BytesIO(cutout_resp.content)).convert("RGBA")
+        cutout = Image.open(BytesIO(cutout_resp.content)).convert("RGBA")
 
-    # 4. Build styled background + composite (reuse prep-video-frame logic)
-    bg = _build_video_bg(style, width, height, theme)
+        # 4. Build background — gradient (PIL) or scenic (AI-generated)
+        if bg_mode == "scenic":
+            bg = await _generate_scenic_bg(style, width, height, client)
+        else:
+            bg = _build_video_bg(style, width, height, theme)
     cw, ch = cutout.size
     aspect = width / max(height, 1)
     is_square = 0.8 < aspect < 1.2
