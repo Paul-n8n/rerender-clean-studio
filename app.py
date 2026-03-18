@@ -1117,7 +1117,7 @@ def _render_p4(
     feat_y = int(H * P4_FEAT_Y_FRAC)
 
     draw_text_align_left(draw, pad, feat_y, title_text, title_font, text_color)
-    feat_y += title_h + 48
+    feat_y += title_h + 64
 
     if tag_text:
         tx0, ty0 = pad, feat_y
