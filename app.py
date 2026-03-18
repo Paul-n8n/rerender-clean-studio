@@ -1117,17 +1117,25 @@ def _render_p4(
     feat_y = int(H * P4_FEAT_Y_FRAC)
 
     draw_text_align_left(draw, pad, feat_y, title_text, title_font, text_color)
-    feat_y += title_h + 64
 
     if tag_text:
-        tx0, ty0 = pad, feat_y
+        # Use bbox for precise title bottom, then centre tag pill between title and body
+        _title_bbox = draw.textbbox((pad, feat_y), title_text, font=title_font)
+        title_bottom = _title_bbox[3]
+        # Measure body height to calculate even spacing
+        body_top_estimate = title_bottom + tag_h + 120  # rough total span
+        gap = 56  # equal gap above and below tag pill
+        tx0 = pad
+        ty0 = title_bottom + gap
         tx1, ty1 = tx0 + tag_w, ty0 + tag_h
         draw_rounded_rect(draw, (tx0, ty0, tx1, ty1), radius=8, fill=tag_bg)
         # Centre text inside pill using anchor='mm'
         pill_cx = tx0 + tag_w // 2
         pill_cy = ty0 + tag_h // 2
         draw.text((pill_cx, pill_cy), tag_text, font=tag_font, fill=tag_fg, anchor='mm')
-        feat_y += tag_h + 48
+        feat_y = ty1 + gap
+    else:
+        feat_y += title_h + 56
 
     body_col = (text_color[0], text_color[1], text_color[2], 210)
     for line in body_lines:
