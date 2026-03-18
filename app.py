@@ -976,7 +976,7 @@ def render_p3(
 # =====================================================================
 
 P4_HERO_SCALE  = 1.20   # hero height = 120% of canvas height
-P4_HERO_X_FRAC = 0.40   # hero left edge starts at 40% of W (right-anchored)
+P4_HERO_X_FRAC = 0.30   # hero left edge starts at 30% of W (show more reel)
 P4_HERO_Y_BIAS = -0.06  # nudge hero upward (fraction of H) to expose spool
 P4_TEXT_W_FRAC = 0.42   # text block uses left 42% of canvas
 P4_FEAT_Y_FRAC = 0.40   # Feature block starts at 40% down canvas
