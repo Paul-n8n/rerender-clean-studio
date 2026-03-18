@@ -1167,8 +1167,13 @@ async def prep_post_image(
 
         # 4. Build background — gradient (PIL) or scenic (AI-generated)
         if bg_mode == "scenic":
-            bg = await _generate_scenic_bg(style, width, height, client)
+            # Randomize style for variety — ignore GPT's pick, choose randomly
+            import random as _rnd
+            scenic_keys = list(SCENIC_PROMPTS.keys())
+            actual_style = _rnd.choice(scenic_keys)
+            bg = await _generate_scenic_bg(actual_style, width, height, client)
         else:
+            actual_style = style
             bg = _build_video_bg(style, width, height, theme)
     cw, ch = cutout.size
     aspect = width / max(height, 1)
@@ -1251,7 +1256,7 @@ async def prep_post_image(
 
     # Always return JSON with the URL (compositor serves the image via /r2/get-image)
     if r2_url:
-        return {"ok": True, "r2_url": r2_url, "r2_key": actual_key, "style": style, "elapsed_s": elapsed}
+        return {"ok": True, "r2_url": r2_url, "r2_key": actual_key, "style": actual_style, "elapsed_s": elapsed}
 
     # Fallback: return image directly
     return Response(content=final_bytes, media_type="image/png")
