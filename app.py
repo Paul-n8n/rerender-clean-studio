@@ -974,10 +974,12 @@ async def prep_video_frame(
     # Build the background
     bg = _build_video_bg(style, width, height, theme)
 
-    # Scale cutout to fit ~70% of frame height, maintain aspect ratio
+    # Scale cutout — larger for square (post) vs tall (video) frames
     cw, ch = cutout.size
-    target_h = int(height * 0.70)
-    target_w = int(width * 0.85)
+    aspect = width / max(height, 1)
+    is_square = 0.8 < aspect < 1.2  # ~square aspect ratio
+    target_h = int(height * (0.85 if is_square else 0.70))
+    target_w = int(width * (0.90 if is_square else 0.85))
     scale = min(target_w / cw, target_h / ch)
     new_w = int(cw * scale)
     new_h = int(ch * scale)
