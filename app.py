@@ -1038,6 +1038,8 @@ async def prep_post_image(
     save_key: str = Query(None, description="Optional R2 key to save result"),
     width: int = Query(1080, description="Output width"),
     height: int = Query(1080, description="Output height (square for posts)"),
+    brand: str = Query("", description="Brand name for text overlay"),
+    model: str = Query("", description="Model name for text overlay"),
 ):
     """All-in-one post image: fetch hero from R2 → bg removal via fal.ai → composite on styled background → save to R2.
     Returns JSON with r2_url for the final image."""
@@ -1118,9 +1120,54 @@ async def prep_post_image(
             reflection = reflection.crop((0, 0, new_w, crop_h))
         bg.paste(reflection, (paste_x, ref_y), reflection)
 
+    # 5. Add brand + model text overlay
+    if brand or model:
+        draw = ImageDraw.Draw(bg)
+        # Brand text — large, bold, bottom area
+        brand_text = brand.upper() if brand else ""
+        model_text = model.upper() if model else ""
+
+        # Choose text color based on background brightness
+        # Sample center-bottom pixel to determine if bg is light or dark
+        sample_y = min(height - 50, height - 1)
+        sample_x = width // 2
+        try:
+            sample_pixel = bg.getpixel((sample_x, sample_y))
+            brightness = (sample_pixel[0] * 299 + sample_pixel[1] * 587 + sample_pixel[2] * 114) / 1000
+        except Exception:
+            brightness = 50  # assume dark
+        text_color = (255, 255, 255, 230) if brightness < 128 else (20, 20, 20, 230)
+        shadow_color = (0, 0, 0, 120) if brightness < 128 else (255, 255, 255, 80)
+
+        # Load fonts — use fit_text style sizing
+        try:
+            brand_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
+            model_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
+        except Exception:
+            brand_font = ImageFont.load_default()
+            model_font = ImageFont.load_default()
+
+        # Position: bottom center, above reflection area
+        text_y = height - 120
+        if brand_text:
+            bb = draw.textbbox((0, 0), brand_text, font=brand_font)
+            tw = bb[2] - bb[0]
+            tx = (width - tw) // 2
+            # Shadow
+            draw.text((tx + 2, text_y + 2), brand_text, fill=shadow_color, font=brand_font)
+            draw.text((tx, text_y), brand_text, fill=text_color, font=brand_font)
+            text_y += 55
+
+        if model_text:
+            bb = draw.textbbox((0, 0), model_text, font=model_font)
+            tw = bb[2] - bb[0]
+            tx = (width - tw) // 2
+            draw.text((tx + 1, text_y + 1), model_text, fill=shadow_color, font=model_font)
+            draw.text((tx, text_y), model_text, fill=text_color, font=model_font)
+
     final = bg.convert("RGB")
 
-    # 5. Save to R2
+    # 6. Save to R2
     out_buf = BytesIO()
     final.save(out_buf, format="PNG", quality=95)
     out_buf.seek(0)
