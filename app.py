@@ -976,7 +976,7 @@ def render_p3(
 # =====================================================================
 
 P4_HERO_SCALE  = 1.20   # hero height = 120% of canvas height
-P4_HERO_X_FRAC = 0.30   # hero left edge starts at 30% of W (show more reel)
+P4_HERO_X_FRAC = 0.24   # hero left edge starts at 24% of W (show more reel)
 P4_HERO_Y_BIAS = -0.06  # nudge hero upward (fraction of H) to expose spool
 P4_TEXT_W_FRAC = 0.42   # text block uses left 42% of canvas
 P4_FEAT_Y_FRAC = 0.40   # Feature block starts at 40% down canvas
@@ -1063,7 +1063,7 @@ def _render_p4(
 
     # ── Feature tag pill metrics ──────────────────────────────────────
     tag_text = (feature_tag or "").strip()
-    tag_font = load_font_bold(28)
+    tag_font = load_font_bold(32)
     tag_bg   = STICKER_FILL              if is_dark else (20, 20, 20, 220)
     tag_fg   = STICKER_TEXT              if is_dark else (255, 255, 255, 255)
     tag_w = tag_h = 0
@@ -1100,7 +1100,7 @@ def _render_p4(
     feat_y = int(H * P4_FEAT_Y_FRAC)
 
     draw_text_align_left(draw, pad, feat_y, title_text, title_font, text_color)
-    feat_y += title_h + 40
+    feat_y += title_h + 32
 
     if tag_text:
         tx0, ty0 = pad, feat_y
@@ -1110,7 +1110,7 @@ def _render_p4(
         pill_cx = tx0 + tag_w // 2
         pill_cy = ty0 + tag_h // 2
         draw.text((pill_cx, pill_cy), tag_text, font=tag_font, fill=tag_fg, anchor='mm')
-        feat_y += tag_h + 28
+        feat_y += tag_h + 32
 
     body_col = (text_color[0], text_color[1], text_color[2], 210)
     for line in body_lines:
