@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import boto3
 from botocore.config import Config
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -407,6 +407,23 @@ CHIP_ICONS = {
 @app.get("/health")
 def health():
     return {"ok": True, "version": VERSION}
+
+
+@app.post("/r2/upload")
+async def r2_upload(key: str, file: UploadFile = File(...)):
+    """Upload a file to R2. Used by marketing pipeline to store hero photos."""
+    bucket = os.environ.get("R2_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
+    s3 = r2_client()
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    try:
+        s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType=file.content_type or "image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"R2 upload failed: {e}")
+    return {"ok": True, "key": key, "size": len(data)}
 
 
 @app.get("/r2/get-image")
@@ -1100,7 +1117,7 @@ def _render_p4(
     feat_y = int(H * P4_FEAT_Y_FRAC)
 
     draw_text_align_left(draw, pad, feat_y, title_text, title_font, text_color)
-    feat_y += title_h + 32
+    feat_y += title_h + 48
 
     if tag_text:
         tx0, ty0 = pad, feat_y
@@ -1110,7 +1127,7 @@ def _render_p4(
         pill_cx = tx0 + tag_w // 2
         pill_cy = ty0 + tag_h // 2
         draw.text((pill_cx, pill_cy), tag_text, font=tag_font, fill=tag_fg, anchor='mm')
-        feat_y += tag_h + 32
+        feat_y += tag_h + 48
 
     body_col = (text_color[0], text_color[1], text_color[2], 210)
     for line in body_lines:
