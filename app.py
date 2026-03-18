@@ -1222,17 +1222,35 @@ async def prep_post_image(
             model_font = ImageFont.load_default()
             size_font = ImageFont.load_default()
 
-        # Position: top of image, centered horizontally
-        text_y = 30
-        for label, font in [(brand_text, brand_font), (model_text, model_font), (size_text, size_font)]:
-            if not label:
-                continue
+        # Calculate total text block height first
+        text_lines = [(label, font) for label, font in [(brand_text, brand_font), (model_text, model_font), (size_text, size_font)] if label]
+        total_text_h = 0
+        for label, font in text_lines:
+            bb = draw.textbbox((0, 0), label, font=font)
+            total_text_h += (bb[3] - bb[1]) + 12
+
+        # Draw semi-transparent dark banner behind text for readability
+        banner_pad_x = 40
+        banner_pad_y = 20
+        banner_top = 20
+        banner_bottom = banner_top + total_text_h + banner_pad_y * 2
+        banner = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        banner_draw = ImageDraw.Draw(banner)
+        banner_draw.rectangle(
+            [(0, banner_top), (width, banner_bottom)],
+            fill=(0, 0, 0, 140)
+        )
+        bg = Image.alpha_composite(bg, banner)
+        draw = ImageDraw.Draw(bg)
+
+        # Position: top of image, centered horizontally, on top of banner
+        text_y = banner_top + banner_pad_y
+        for label, font in text_lines:
             bb = draw.textbbox((0, 0), label, font=font)
             tw = bb[2] - bb[0]
             tx = (width - tw) // 2
-            # Dark shadow (offset 2px)
-            draw.text((tx + 2, text_y + 2), label, fill=shadow_color, font=font)
-            draw.text((tx, text_y), label, fill=text_color, font=font)
+            # White text — always readable on dark banner
+            draw.text((tx, text_y), label, fill=(255, 255, 255, 255), font=font)
             text_y += (bb[3] - bb[1]) + 12
 
     final = bg.convert("RGB")
