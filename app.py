@@ -656,25 +656,182 @@ def _build_video_bg(style: str, w: int, h: int, theme: str = "teal") -> Image.Im
                 c = _lerp_color((15, 80, 30), (8, 15, 8), (t - 0.4) / 0.6)
             draw.line([(0, y), (w, y)], fill=c)
 
-    elif style == "volcanic":
+    # ---- MALAYSIAN FISHING LOCATIONS ----
+    elif style == "mangrove_estuary":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((45, 60, 25), (55, 50, 30), t / 0.4)
+            else:
+                c = _lerp_color((55, 50, 30), (20, 15, 10), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+        _add_noise_texture(draw, w, h, (50, 45, 30), strength=8)
+
+    elif style == "offshore_terengganu":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((20, 60, 140), (15, 40, 100), t / 0.4)
+            else:
+                c = _lerp_color((15, 40, 100), (8, 15, 35), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "kelong_sunset":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.3:
-                c = _lerp_color((120, 30, 10), (180, 80, 15), t / 0.3)
+                c = _lerp_color((200, 120, 40), (180, 90, 60), t / 0.3)
             elif t < 0.6:
-                c = _lerp_color((180, 80, 15), (80, 25, 8), (t - 0.3) / 0.3)
+                c = _lerp_color((180, 90, 60), (40, 80, 100), (t - 0.3) / 0.3)
             else:
-                c = _lerp_color((80, 25, 8), (15, 8, 5), (t - 0.6) / 0.4)
+                c = _lerp_color((40, 80, 100), (15, 25, 40), (t - 0.6) / 0.4)
             draw.line([(0, y), (w, y)], fill=c)
 
-    elif style == "arctic":
+    elif style == "jungle_stream":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.35:
+                c = _lerp_color((30, 100, 30), (15, 65, 20), t / 0.35)
+            else:
+                c = _lerp_color((15, 65, 20), (5, 12, 5), (t - 0.35) / 0.65)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "monsoon_squall":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.6:
+                c = _lerp_color((50, 55, 62), (30, 32, 38), t / 0.6)
+            else:
+                c = _lerp_color((30, 32, 38), (18, 28, 30), (t - 0.6) / 0.4)
+            draw.line([(0, y), (w, y)], fill=c)
+        _add_horizontal_bands(bg, count=8, max_alpha=18)
+
+    elif style == "dam_reservoir":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((40, 70, 45), (25, 60, 55), t / 0.4)
+            else:
+                c = _lerp_color((25, 60, 55), (12, 25, 30), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "fishing_pond":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((60, 65, 30), (50, 55, 28), t / 0.4)
+            else:
+                c = _lerp_color((50, 55, 28), (22, 18, 12), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    # ---- MALAYSIAN FISH HABITATS ----
+    elif style == "coral_reef":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.3:
+                c = _lerp_color((0, 180, 170), (180, 100, 120), t / 0.3)
+            elif t < 0.6:
+                c = _lerp_color((180, 100, 120), (30, 80, 140), (t - 0.3) / 0.3)
+            else:
+                c = _lerp_color((30, 80, 140), (10, 20, 50), (t - 0.6) / 0.4)
+            draw.line([(0, y), (w, y)], fill=c)
+        _add_bokeh(bg, count=20, min_r=4, max_r=25, color=(200, 230, 255), max_alpha=25)
+
+    elif style == "murky_riverbed":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((60, 45, 25), (45, 50, 25), t / 0.4)
+            else:
+                c = _lerp_color((45, 50, 25), (10, 8, 5), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+        _add_noise_texture(draw, w, h, (50, 40, 25), strength=10)
+
+    elif style == "seagrass_shallows":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.3:
+                c = _lerp_color((120, 190, 160), (180, 170, 100), t / 0.3)
+            elif t < 0.6:
+                c = _lerp_color((180, 170, 100), (40, 120, 110), (t - 0.3) / 0.3)
+            else:
+                c = _lerp_color((40, 120, 110), (15, 40, 40), (t - 0.6) / 0.4)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "deep_dropoff":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.5:
-                c = _lerp_color((180, 210, 230), (210, 225, 235), t / 0.5)
+                c = _lerp_color((15, 25, 60), (20, 15, 50), t / 0.5)
             else:
-                c = _lerp_color((210, 225, 235), (150, 170, 190), (t - 0.5) / 0.5)
+                c = _lerp_color((20, 15, 50), (5, 3, 10), (t - 0.5) / 0.5)
             draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "kelp_forest":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((35, 50, 25), (30, 42, 20), t / 0.4)
+            else:
+                c = _lerp_color((30, 42, 20), (8, 12, 6), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "sandy_bottom":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((180, 160, 110), (150, 130, 85), t / 0.4)
+            else:
+                c = _lerp_color((150, 130, 85), (40, 30, 18), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "rock_structure":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((70, 65, 58), (55, 50, 45), t / 0.4)
+            else:
+                c = _lerp_color((55, 50, 45), (22, 20, 18), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "tidal_channel":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((20, 90, 90), (30, 110, 100), t / 0.4)
+            else:
+                c = _lerp_color((30, 110, 100), (10, 20, 40), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "pelagic_blue":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.3:
+                c = _lerp_color((30, 140, 200), (20, 80, 160), t / 0.3)
+            else:
+                c = _lerp_color((20, 80, 160), (8, 20, 50), (t - 0.3) / 0.7)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "current_line":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.35:
+                c = _lerp_color((25, 90, 80), (60, 130, 150), t / 0.35)
+            elif t < 0.5:
+                c = _lerp_color((60, 130, 150), (25, 90, 80), (t - 0.35) / 0.15)
+            else:
+                c = _lerp_color((25, 90, 80), (8, 18, 35), (t - 0.5) / 0.5)
+            draw.line([(0, y), (w, y)], fill=c)
+
+    elif style == "squid_depths":
+        for y in range(h):
+            t = y / max(h - 1, 1)
+            if t < 0.4:
+                c = _lerp_color((30, 18, 60), (18, 12, 45), t / 0.4)
+            else:
+                c = _lerp_color((18, 12, 45), (5, 3, 12), (t - 0.4) / 0.6)
+            draw.line([(0, y), (w, y)], fill=c)
+        _add_bokeh(bg, count=12, min_r=2, max_r=8, color=(80, 200, 180), max_alpha=30)
 
     # ---- ABSTRACT/CREATIVE ----
     elif style == "neon_glow":
@@ -784,7 +941,12 @@ VIDEO_BG_STYLES = [
     "studio_dark", "studio_white", "studio_spotlight", "studio_split",
     "studio_warm", "studio_cool",
     "sunset_ocean", "dawn_mist", "golden_hour", "storm_sea",
-    "tropical_coast", "forest_canopy", "volcanic", "arctic",
+    "tropical_coast", "forest_canopy",
+    "mangrove_estuary", "offshore_terengganu", "kelong_sunset", "jungle_stream",
+    "monsoon_squall", "dam_reservoir", "fishing_pond",
+    "coral_reef", "murky_riverbed", "seagrass_shallows", "deep_dropoff",
+    "kelp_forest", "sandy_bottom", "rock_structure", "tidal_channel",
+    "pelagic_blue", "current_line", "squid_depths",
     "neon_glow", "smoke_noir", "bokeh_night", "gradient_diagonal",
     "copper_rust", "deep_space", "chrome", "velvet",
     "water_caustics", "honeycomb", "brushed_metal", "concrete",
@@ -827,7 +989,7 @@ async def prep_video_frame(
     bg.paste(cutout_resized, (paste_x, paste_y), cutout_resized)
 
     # Add subtle reflection below product (skip for bright/white styles)
-    skip_reflection = style in ("studio_white", "arctic", "chrome")
+    skip_reflection = style in ("studio_white", "chrome")
     if not skip_reflection and paste_y + new_h < height - 50:
         reflection = cutout_resized.transpose(Image.FLIP_TOP_BOTTOM)
         r_alpha = reflection.split()[3]
