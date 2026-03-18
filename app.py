@@ -1027,6 +1027,124 @@ def list_video_bg_styles():
     return {"styles": VIDEO_BG_STYLES, "count": len(VIDEO_BG_STYLES)}
 
 
+FAL_KEY = os.environ.get("FAL_KEY", "")
+
+
+@app.get("/prep-post-image")
+async def prep_post_image(
+    hero_key: str = Query(..., description="R2 key of raw hero photo (e.g. marketing/heroes/MV_xxx.jpg)"),
+    style: str = Query("sunset_ocean", description="Background style preset"),
+    theme: str = Query("teal", description="Theme color for accent-based styles"),
+    save_key: str = Query(None, description="Optional R2 key to save result"),
+    width: int = Query(1080, description="Output width"),
+    height: int = Query(1080, description="Output height (square for posts)"),
+):
+    """All-in-one post image: fetch hero from R2 → bg removal via fal.ai → composite on styled background → save to R2.
+    Returns JSON with r2_url for the final image."""
+    import time
+    t0 = time.time()
+
+    # 1. Fetch hero image from R2
+    bucket = os.environ.get("R2_BUCKET")
+    s3 = r2_client()
+    try:
+        obj = s3.get_object(Bucket=bucket, Key=hero_key)
+        hero_bytes = obj["Body"].read()
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Hero image not found in R2: {hero_key} — {e}")
+
+    # 2. Upload hero to fal.ai for bg removal (send as data URL to avoid R2 auth issues)
+    import base64
+    hero_b64 = base64.b64encode(hero_bytes).decode("utf-8")
+    # Detect content type
+    ct = "image/jpeg"
+    if hero_bytes[:4] == b"\x89PNG":
+        ct = "image/png"
+    data_url = f"data:{ct};base64,{hero_b64}"
+
+    if not FAL_KEY:
+        raise HTTPException(status_code=500, detail="FAL_KEY not configured")
+
+    async with httpx.AsyncClient(timeout=90) as client:
+        fal_resp = await client.post(
+            "https://fal.run/fal-ai/birefnet/v2",
+            headers={"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"},
+            json={
+                "image_url": data_url,
+                "model": "General Use (Heavy)",
+                "operating_resolution": "1024x1024",
+                "output_format": "png",
+            },
+        )
+        if fal_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"fal.ai bg removal failed: {fal_resp.status_code} {fal_resp.text[:200]}")
+        fal_data = fal_resp.json()
+        cutout_url = fal_data.get("image", {}).get("url", "")
+        if not cutout_url:
+            raise HTTPException(status_code=502, detail="fal.ai returned no cutout URL")
+
+        # 3. Download cutout
+        cutout_resp = await client.get(cutout_url)
+        if cutout_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Failed to download cutout: {cutout_resp.status_code}")
+
+    cutout = Image.open(BytesIO(cutout_resp.content)).convert("RGBA")
+
+    # 4. Build styled background + composite (reuse prep-video-frame logic)
+    bg = _build_video_bg(style, width, height, theme)
+    cw, ch = cutout.size
+    aspect = width / max(height, 1)
+    is_square = 0.8 < aspect < 1.2
+    target_h = int(height * (0.85 if is_square else 0.70))
+    target_w = int(width * (0.90 if is_square else 0.85))
+    scale = min(target_w / cw, target_h / ch)
+    new_w = int(cw * scale)
+    new_h = int(ch * scale)
+    cutout_resized = cutout.resize((new_w, new_h), Image.LANCZOS)
+    paste_x = (width - new_w) // 2
+    paste_y = (height - new_h) // 2
+    bg.paste(cutout_resized, (paste_x, paste_y), cutout_resized)
+
+    # Reflection
+    skip_reflection = style in ("studio_white", "chrome", "fishing_pond", "sandy_bottom")
+    if not skip_reflection and paste_y + new_h < height - 50:
+        reflection = cutout_resized.transpose(Image.FLIP_TOP_BOTTOM)
+        r_alpha = reflection.split()[3]
+        r_alpha = r_alpha.point(lambda p: int(p * 0.15))
+        reflection.putalpha(r_alpha)
+        ref_y = paste_y + new_h + 5
+        if ref_y + new_h > height:
+            crop_h = height - ref_y
+            reflection = reflection.crop((0, 0, new_w, crop_h))
+        bg.paste(reflection, (paste_x, ref_y), reflection)
+
+    final = bg.convert("RGB")
+
+    # 5. Save to R2
+    out_buf = BytesIO()
+    final.save(out_buf, format="PNG", quality=95)
+    out_buf.seek(0)
+    final_bytes = out_buf.getvalue()
+
+    r2_url = ""
+    actual_key = save_key or f"marketing/posts/{hero_key.split('/')[-1].replace('.jpg', '.png').replace('.jpeg', '.png')}"
+    try:
+        s3.put_object(Bucket=bucket, Key=actual_key, Body=final_bytes, ContentType="image/png")
+        r2_pub = os.environ.get("R2_PUBLIC_URL", "")
+        r2_url = f"{r2_pub}/{actual_key}" if r2_pub else ""
+    except Exception as e:
+        pass  # Non-fatal — return image directly
+
+    elapsed = round(time.time() - t0, 1)
+
+    # If we have a public R2 URL, return JSON
+    if r2_url:
+        return {"ok": True, "r2_url": r2_url, "r2_key": actual_key, "style": style, "elapsed_s": elapsed}
+
+    # Otherwise return the image directly
+    return Response(content=final_bytes, media_type="image/png")
+
+
 def load_bg(theme: str):
     t = (theme or "yellow").lower()
     path = os.path.join(BG_DIR, f"{t}.png")
