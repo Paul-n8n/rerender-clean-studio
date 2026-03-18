@@ -600,41 +600,41 @@ def _build_video_bg(style: str, w: int, h: int, theme: str = "teal") -> Image.Im
     elif style == "studio_cool":
         _vertical_gradient(draw, w, h, (25, 35, 55), (12, 16, 28))
 
-    # ---- NATURE-INSPIRED ----
+    # ---- NATURE-INSPIRED (BRIGHT) ----
     elif style == "sunset_ocean":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.3:
-                c = _lerp_color((180, 90, 30), (140, 50, 80), t / 0.3)
+                c = _lerp_color((255, 160, 60), (240, 100, 120), t / 0.3)
             elif t < 0.6:
-                c = _lerp_color((140, 50, 80), (50, 20, 60), (t - 0.3) / 0.3)
+                c = _lerp_color((240, 100, 120), (160, 60, 140), (t - 0.3) / 0.3)
             else:
-                c = _lerp_color((50, 20, 60), (15, 10, 20), (t - 0.6) / 0.4)
+                c = _lerp_color((160, 60, 140), (100, 40, 110), (t - 0.6) / 0.4)
             draw.line([(0, y), (w, y)], fill=c)
 
     elif style == "dawn_mist":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.4:
-                c = _lerp_color((160, 120, 140), (130, 150, 170), t / 0.4)
+                c = _lerp_color((240, 180, 200), (200, 210, 230), t / 0.4)
             else:
-                c = _lerp_color((130, 150, 170), (60, 65, 75), (t - 0.4) / 0.6)
+                c = _lerp_color((200, 210, 230), (140, 160, 185), (t - 0.4) / 0.6)
             draw.line([(0, y), (w, y)], fill=c)
-        _add_horizontal_bands(bg, count=4, max_alpha=20)
+        _add_horizontal_bands(bg, count=4, max_alpha=15)
 
     elif style == "golden_hour":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.5:
-                c = _lerp_color((200, 150, 50), (160, 100, 30), t / 0.5)
+                c = _lerp_color((255, 210, 80), (240, 160, 60), t / 0.5)
             else:
-                c = _lerp_color((160, 100, 30), (30, 20, 10), (t - 0.5) / 0.5)
+                c = _lerp_color((240, 160, 60), (180, 100, 40), (t - 0.5) / 0.5)
             draw.line([(0, y), (w, y)], fill=c)
 
     elif style == "storm_sea":
         for y in range(h):
             t = y / max(h - 1, 1)
-            c = _lerp_color((30, 55, 65), (12, 15, 18), t)
+            c = _lerp_color((80, 130, 150), (40, 70, 90), t)
             draw.line([(0, y), (w, y)], fill=c)
         _add_horizontal_bands(bg, count=6, max_alpha=18)
 
@@ -642,58 +642,58 @@ def _build_video_bg(style: str, w: int, h: int, theme: str = "teal") -> Image.Im
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.5:
-                c = _lerp_color((0, 180, 170), (0, 100, 140), t / 0.5)
+                c = _lerp_color((0, 220, 210), (0, 160, 200), t / 0.5)
             else:
-                c = _lerp_color((0, 100, 140), (10, 25, 50), (t - 0.5) / 0.5)
+                c = _lerp_color((0, 160, 200), (20, 80, 140), (t - 0.5) / 0.5)
             draw.line([(0, y), (w, y)], fill=c)
 
     elif style == "forest_canopy":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.4:
-                c = _lerp_color((20, 60, 20), (15, 80, 30), t / 0.4)
+                c = _lerp_color((60, 160, 60), (40, 130, 50), t / 0.4)
             else:
-                c = _lerp_color((15, 80, 30), (8, 15, 8), (t - 0.4) / 0.6)
+                c = _lerp_color((40, 130, 50), (25, 80, 30), (t - 0.4) / 0.6)
             draw.line([(0, y), (w, y)], fill=c)
 
-    # ---- MALAYSIAN FISHING LOCATIONS ----
+    # ---- MALAYSIAN FISHING LOCATIONS (BRIGHT) ----
     elif style == "mangrove_estuary":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.4:
-                c = _lerp_color((45, 60, 25), (55, 50, 30), t / 0.4)
+                c = _lerp_color((100, 140, 50), (120, 110, 60), t / 0.4)
             else:
-                c = _lerp_color((55, 50, 30), (20, 15, 10), (t - 0.4) / 0.6)
+                c = _lerp_color((120, 110, 60), (60, 50, 30), (t - 0.4) / 0.6)
             draw.line([(0, y), (w, y)], fill=c)
-        _add_noise_texture(draw, w, h, (50, 45, 30), strength=8)
+        _add_noise_texture(draw, w, h, (80, 75, 50), strength=8)
 
     elif style == "offshore_terengganu":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.4:
-                c = _lerp_color((20, 60, 140), (15, 40, 100), t / 0.4)
+                c = _lerp_color((40, 120, 220), (30, 80, 180), t / 0.4)
             else:
-                c = _lerp_color((15, 40, 100), (8, 15, 35), (t - 0.4) / 0.6)
+                c = _lerp_color((30, 80, 180), (20, 50, 120), (t - 0.4) / 0.6)
             draw.line([(0, y), (w, y)], fill=c)
 
     elif style == "kelong_sunset":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.3:
-                c = _lerp_color((200, 120, 40), (180, 90, 60), t / 0.3)
+                c = _lerp_color((255, 180, 60), (240, 130, 80), t / 0.3)
             elif t < 0.6:
-                c = _lerp_color((180, 90, 60), (40, 80, 100), (t - 0.3) / 0.3)
+                c = _lerp_color((240, 130, 80), (80, 140, 170), (t - 0.3) / 0.3)
             else:
-                c = _lerp_color((40, 80, 100), (15, 25, 40), (t - 0.6) / 0.4)
+                c = _lerp_color((80, 140, 170), (40, 80, 120), (t - 0.6) / 0.4)
             draw.line([(0, y), (w, y)], fill=c)
 
     elif style == "jungle_stream":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.35:
-                c = _lerp_color((30, 100, 30), (15, 65, 20), t / 0.35)
+                c = _lerp_color((60, 180, 60), (40, 130, 45), t / 0.35)
             else:
-                c = _lerp_color((15, 65, 20), (5, 12, 5), (t - 0.35) / 0.65)
+                c = _lerp_color((40, 130, 45), (20, 70, 20), (t - 0.35) / 0.65)
             draw.line([(0, y), (w, y)], fill=c)
 
     elif style == "monsoon_squall":
@@ -710,18 +710,18 @@ def _build_video_bg(style: str, w: int, h: int, theme: str = "teal") -> Image.Im
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.4:
-                c = _lerp_color((40, 70, 45), (25, 60, 55), t / 0.4)
+                c = _lerp_color((65, 120, 75), (50, 110, 95), t / 0.4)
             else:
-                c = _lerp_color((25, 60, 55), (12, 25, 30), (t - 0.4) / 0.6)
+                c = _lerp_color((50, 110, 95), (30, 70, 65), (t - 0.4) / 0.6)
             draw.line([(0, y), (w, y)], fill=c)
 
     elif style == "fishing_pond":
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.4:
-                c = _lerp_color((60, 65, 30), (50, 55, 28), t / 0.4)
+                c = _lerp_color((95, 110, 55), (80, 95, 50), t / 0.4)
             else:
-                c = _lerp_color((50, 55, 28), (22, 18, 12), (t - 0.4) / 0.6)
+                c = _lerp_color((80, 95, 50), (45, 50, 30), (t - 0.4) / 0.6)
             draw.line([(0, y), (w, y)], fill=c)
 
     # ---- MALAYSIAN FISH HABITATS ----
@@ -729,11 +729,11 @@ def _build_video_bg(style: str, w: int, h: int, theme: str = "teal") -> Image.Im
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.3:
-                c = _lerp_color((0, 180, 170), (180, 100, 120), t / 0.3)
+                c = _lerp_color((20, 200, 190), (200, 120, 140), t / 0.3)
             elif t < 0.6:
-                c = _lerp_color((180, 100, 120), (30, 80, 140), (t - 0.3) / 0.3)
+                c = _lerp_color((200, 120, 140), (50, 110, 170), (t - 0.3) / 0.3)
             else:
-                c = _lerp_color((30, 80, 140), (10, 20, 50), (t - 0.6) / 0.4)
+                c = _lerp_color((50, 110, 170), (30, 60, 110), (t - 0.6) / 0.4)
             draw.line([(0, y), (w, y)], fill=c)
         _add_bokeh(bg, count=20, min_r=4, max_r=25, color=(200, 230, 255), max_alpha=25)
 
@@ -751,11 +751,11 @@ def _build_video_bg(style: str, w: int, h: int, theme: str = "teal") -> Image.Im
         for y in range(h):
             t = y / max(h - 1, 1)
             if t < 0.3:
-                c = _lerp_color((120, 190, 160), (180, 170, 100), t / 0.3)
+                c = _lerp_color((130, 200, 170), (190, 185, 120), t / 0.3)
             elif t < 0.6:
-                c = _lerp_color((180, 170, 100), (40, 120, 110), (t - 0.3) / 0.3)
+                c = _lerp_color((190, 185, 120), (60, 145, 130), (t - 0.3) / 0.3)
             else:
-                c = _lerp_color((40, 120, 110), (15, 40, 40), (t - 0.6) / 0.4)
+                c = _lerp_color((60, 145, 130), (35, 80, 75), (t - 0.6) / 0.4)
             draw.line([(0, y), (w, y)], fill=c)
 
     elif style == "deep_dropoff":
@@ -1040,6 +1040,7 @@ async def prep_post_image(
     height: int = Query(1080, description="Output height (square for posts)"),
     brand: str = Query("", description="Brand name for text overlay"),
     model: str = Query("", description="Model name for text overlay"),
+    size: str = Query("", description="Size info for text overlay"),
 ):
     """All-in-one post image: fetch hero from R2 → bg removal via fal.ai → composite on styled background → save to R2.
     Returns JSON with r2_url for the final image."""
@@ -1120,50 +1121,39 @@ async def prep_post_image(
             reflection = reflection.crop((0, 0, new_w, crop_h))
         bg.paste(reflection, (paste_x, ref_y), reflection)
 
-    # 5. Add brand + model text overlay
-    if brand or model:
+    # 5. Add brand + model + size text overlay (top of image, white with dark shadow)
+    if brand or model or size:
         draw = ImageDraw.Draw(bg)
-        # Brand text — large, bold, bottom area
         brand_text = brand.upper() if brand else ""
         model_text = model.upper() if model else ""
+        size_text = size.upper() if size else ""
 
-        # Choose text color based on background brightness
-        # Sample center-bottom pixel to determine if bg is light or dark
-        sample_y = min(height - 50, height - 1)
-        sample_x = width // 2
-        try:
-            sample_pixel = bg.getpixel((sample_x, sample_y))
-            brightness = (sample_pixel[0] * 299 + sample_pixel[1] * 587 + sample_pixel[2] * 114) / 1000
-        except Exception:
-            brightness = 50  # assume dark
-        text_color = (255, 255, 255, 230) if brightness < 128 else (20, 20, 20, 230)
-        shadow_color = (0, 0, 0, 120) if brightness < 128 else (255, 255, 255, 80)
+        # Always white text with dark shadow — readable on any background
+        text_color = (255, 255, 255, 210)
+        shadow_color = (0, 0, 0, 160)
 
-        # Load fonts — use fit_text style sizing
+        # Load fonts
         try:
             brand_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
-            model_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
+            model_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
+            size_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
         except Exception:
             brand_font = ImageFont.load_default()
             model_font = ImageFont.load_default()
+            size_font = ImageFont.load_default()
 
-        # Position: bottom center, above reflection area
-        text_y = height - 120
-        if brand_text:
-            bb = draw.textbbox((0, 0), brand_text, font=brand_font)
+        # Position: top of image, centered horizontally
+        text_y = 40
+        for label, font in [(brand_text, brand_font), (model_text, model_font), (size_text, size_font)]:
+            if not label:
+                continue
+            bb = draw.textbbox((0, 0), label, font=font)
             tw = bb[2] - bb[0]
             tx = (width - tw) // 2
-            # Shadow
-            draw.text((tx + 2, text_y + 2), brand_text, fill=shadow_color, font=brand_font)
-            draw.text((tx, text_y), brand_text, fill=text_color, font=brand_font)
-            text_y += 55
-
-        if model_text:
-            bb = draw.textbbox((0, 0), model_text, font=model_font)
-            tw = bb[2] - bb[0]
-            tx = (width - tw) // 2
-            draw.text((tx + 1, text_y + 1), model_text, fill=shadow_color, font=model_font)
-            draw.text((tx, text_y), model_text, fill=text_color, font=model_font)
+            # Dark shadow (offset 2px)
+            draw.text((tx + 2, text_y + 2), label, fill=shadow_color, font=font)
+            draw.text((tx, text_y), label, fill=text_color, font=font)
+            text_y += (bb[3] - bb[1]) + 12
 
     final = bg.convert("RGB")
 
