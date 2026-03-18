@@ -1132,18 +1132,18 @@ async def prep_post_image(
         text_color = (255, 255, 255, 210)
         shadow_color = (0, 0, 0, 160)
 
-        # Load fonts
+        # Load fonts — large and bold for social media impact
         try:
-            brand_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
-            model_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
-            size_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
+            brand_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 72)
+            model_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 56)
+            size_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40)
         except Exception:
             brand_font = ImageFont.load_default()
             model_font = ImageFont.load_default()
             size_font = ImageFont.load_default()
 
         # Position: top of image, centered horizontally
-        text_y = 40
+        text_y = 30
         for label, font in [(brand_text, brand_font), (model_text, model_font), (size_text, size_font)]:
             if not label:
                 continue
