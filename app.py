@@ -1130,18 +1130,18 @@ async def prep_post_image(
     actual_key = save_key or f"marketing/posts/{hero_key.split('/')[-1].replace('.jpg', '.png').replace('.jpeg', '.png')}"
     try:
         s3.put_object(Bucket=bucket, Key=actual_key, Body=final_bytes, ContentType="image/png")
-        r2_pub = os.environ.get("R2_PUBLIC_URL", "")
-        r2_url = f"{r2_pub}/{actual_key}" if r2_pub else ""
+        # Use compositor's own /r2/get-image endpoint as the public URL
+        r2_url = f"https://rerender-clean-studio.onrender.com/r2/get-image?key={actual_key}"
     except Exception as e:
-        pass  # Non-fatal — return image directly
+        r2_url = ""
 
     elapsed = round(time.time() - t0, 1)
 
-    # If we have a public R2 URL, return JSON
+    # Always return JSON with the URL (compositor serves the image via /r2/get-image)
     if r2_url:
         return {"ok": True, "r2_url": r2_url, "r2_key": actual_key, "style": style, "elapsed_s": elapsed}
 
-    # Otherwise return the image directly
+    # Fallback: return image directly
     return Response(content=final_bytes, media_type="image/png")
 
 
