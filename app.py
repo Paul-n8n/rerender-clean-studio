@@ -2392,3 +2392,77 @@ def render_p8(
     )
     return Response(content=png, media_type="image/png",
                     headers={"X-Used-Slot": slot_used or "none"})
+
+
+# ---------- /prep-video-frame ----------
+@app.get("/prep-video-frame")
+def prep_video_frame(
+    image_url: str,
+    save_key: str = "",
+    style: str = "studio_dark",
+    theme: str = "teal",
+    width: int = 1080,
+    height: int = 1920,
+):
+    """
+    Compose a video input frame: cutout centred on dark studio background at 9:16.
+    Downloads cutout from image_url, trims transparent padding, scales to fit,
+    centres on dark gradient background. Optionally saves to R2 at save_key.
+    """
+    # Download cutout
+    try:
+        resp = httpx.get(image_url, timeout=30, follow_redirects=True)
+        resp.raise_for_status()
+        cutout_data = resp.content
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to download cutout: {e}")
+
+    cutout = Image.open(BytesIO(cutout_data)).convert("RGBA")
+    cutout = trim_transparent(cutout, pad=0)
+
+    # Dark studio background (Phase 1 locked rule: dark studio for video)
+    bg = Image.new("RGBA", (width, height), (15, 15, 20, 255))
+
+    # Subtle gradient overlay for depth
+    gradient = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(gradient)
+    for y in range(height):
+        t = abs(y - height * 0.45) / (height * 0.55)
+        alpha = int(min(t * 60, 60))
+        draw.line([(0, y), (width, y)], fill=(0, 0, 0, alpha))
+    bg = Image.alpha_composite(bg, gradient)
+
+    # Scale cutout: 70% of frame height, maintain aspect ratio
+    max_h = int(height * 0.70)
+    max_w = int(width * 0.85)
+    cw, ch = cutout.size
+    scale = min(max_w / cw, max_h / ch)
+    new_w = int(cw * scale)
+    new_h = int(ch * scale)
+    cutout_resized = cutout.resize((new_w, new_h), Image.LANCZOS)
+
+    # Centre on canvas
+    x = (width - new_w) // 2
+    y = (height - new_h) // 2
+    bg.paste(cutout_resized, (x, y), cutout_resized)
+
+    # Convert to RGB (no alpha for video frame)
+    frame = bg.convert("RGB")
+
+    buf = BytesIO()
+    frame.save(buf, format="PNG", optimize=True)
+    png_bytes = buf.getvalue()
+
+    # Save to R2 if save_key provided
+    if save_key:
+        bucket = os.environ.get("R2_BUCKET")
+        if bucket:
+            try:
+                s3 = r2_client()
+                s3.put_object(Bucket=bucket, Key=save_key, Body=png_bytes,
+                              ContentType="image/png")
+            except Exception:
+                pass  # Non-fatal
+
+    return Response(content=png_bytes, media_type="image/png",
+                    headers={"X-Save-Key": save_key or "none"})
