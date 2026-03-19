@@ -1,5 +1,6 @@
 import os
 import re
+import httpx
 from io import BytesIO
 from typing import List, Optional
 
