@@ -1262,7 +1262,13 @@ def _render_p5(
 
     if is_inhand:
         # ── Full-bleed photo mode ──────────────────────────────────────
-        canvas = _scale_to_cover(hero.convert("RGBA"), W, H)
+        hero_rgba = hero.convert("RGBA")
+        # Feather alpha edges to soften cutout artifacts on dark bg
+        if hero_rgba.getchannel("A").getextrema()[0] < 250:
+            r, g, b, a = hero_rgba.split()
+            a = a.filter(ImageFilter.GaussianBlur(radius=3))
+            hero_rgba = Image.merge("RGBA", (r, g, b, a))
+        canvas = _scale_to_cover(hero_rgba, W, H)
         draw   = ImageDraw.Draw(canvas)
         text_color = (255, 255, 255, 255)
 
@@ -1300,6 +1306,12 @@ def _render_p5(
         new_w    = max(1, int(hw * scale))
         new_h    = max(1, int(hh * scale))
         hero_rs  = hero.resize((new_w, new_h), Image.LANCZOS)
+
+        # ── Edge feathering: blur alpha channel to soften cutout edges ──
+        r, g, b, a = hero_rs.split()
+        a_feathered = a.filter(ImageFilter.GaussianBlur(radius=2))
+        hero_rs = Image.merge("RGBA", (r, g, b, a_feathered))
+
         px       = (W - new_w) // 2
         py       = (H - new_h) // 2
 
