@@ -2473,7 +2473,8 @@ def prep_video_frame(
 # ---------- /prep-post-image ----------
 @app.get("/prep-post-image")
 def prep_post_image(
-    hero_key: str,
+    hero_key: str = "",
+    image_url: str = "",
     save_key: str = "",
     style: str = "gradient",
     theme: str = "teal",
@@ -2486,11 +2487,24 @@ def prep_post_image(
 ):
     """
     Compose a social-post image: product cutout on themed background at 1:1.
-    Downloads cutout from R2 via hero_key, centres on themed bg,
-    saves to R2 at save_key, returns JSON with r2_url.
+    If image_url provided, downloads from URL (e.g. BiRefNet output).
+    Otherwise downloads from R2 via hero_key.
+    Saves to R2 at save_key, returns JSON with r2_url.
     """
-    # 1. Load cutout from R2
-    data = r2_get_object_bytes(hero_key)
+    import urllib.request
+
+    # 1. Load cutout — prefer image_url (bg-removed), fallback to R2 hero_key
+    if image_url:
+        try:
+            req = urllib.request.Request(image_url, headers={"User-Agent": "compositor/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = resp.read()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to download image: {e}")
+    elif hero_key:
+        data = r2_get_object_bytes(hero_key)
+    else:
+        raise HTTPException(status_code=400, detail="Either hero_key or image_url required")
     cutout = Image.open(BytesIO(data)).convert("RGBA")
     cutout = trim_transparent(cutout, pad=0)
 
