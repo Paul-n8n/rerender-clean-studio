@@ -2221,9 +2221,19 @@ def _load_p8_watermark(product_key: str, group: str) -> tuple:
         return None, ""
 
 
+P8_DEFAULT_PROMISES = [
+    "READY STOCK",
+    "100% ORIGINAL",
+    "WARRANTY SUPPORT",
+    "SHIPS IN 24H",
+    "SAFE PACKING",
+]
+
 def _parse_promise_lines(raw: str) -> list:
-    """Split pipe-separated promise string; cap at P8_MAX_PROMISES items."""
-    return [i.strip() for i in raw.split("|") if i.strip()][:P8_MAX_PROMISES]
+    """Split pipe-separated promise string; cap at P8_MAX_PROMISES items.
+    Falls back to P8_DEFAULT_PROMISES when input is empty."""
+    items = [i.strip() for i in raw.split("|") if i.strip()][:P8_MAX_PROMISES]
+    return items if items else P8_DEFAULT_PROMISES
 
 
 def _render_p8(
