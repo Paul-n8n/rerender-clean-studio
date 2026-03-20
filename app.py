@@ -2396,7 +2396,7 @@ def render_p8(
     model:         str = Query(""),
     theme:         str = Query("grey"),
     promise_lines: str = Query(
-        "READY STOCK|100% ORIGINAL|WARRANTY SUPPORT|SHIPS IN 24H|SECURE CHECKOUT"),
+        ""),
     small_print:   str = Query(""),
     badge:         str = Query(""),
 ):
