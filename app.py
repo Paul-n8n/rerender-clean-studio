@@ -1,6 +1,5 @@
 import os
 import re
-import httpx
 from io import BytesIO
 from typing import List, Optional
 
@@ -2406,34 +2405,37 @@ def prep_video_frame(
     height: int = 1920,
 ):
     """
-    Compose a video input frame: cutout centred on dark studio background at 9:16.
-    Downloads cutout from image_url, trims transparent padding, scales to fit,
-    centres on dark gradient background. Optionally saves to R2 at save_key.
+    Compose a video input frame: cutout on dark studio background at 9:16.
+    Downloads cutout from image_url, centres it on a dark gradient bg,
+    optionally saves to R2 at save_key.
     """
+    import urllib.request
+
     # Download cutout
     try:
-        resp = httpx.get(image_url, timeout=30, follow_redirects=True)
-        resp.raise_for_status()
-        cutout_data = resp.content
+        req = urllib.request.Request(image_url, headers={"User-Agent": "compositor/1.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            cutout_data = resp.read()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to download cutout: {e}")
 
     cutout = Image.open(BytesIO(cutout_data)).convert("RGBA")
     cutout = trim_transparent(cutout, pad=0)
 
-    # Dark studio background (Phase 1 locked rule: dark studio for video)
+    # Build dark studio background (locked Phase 1 rule: dark studio for video)
     bg = Image.new("RGBA", (width, height), (15, 15, 20, 255))
 
-    # Subtle gradient overlay for depth
+    # Add subtle gradient overlay for depth
     gradient = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(gradient)
     for y in range(height):
+        # Dark at top/bottom, slightly lighter in middle
         t = abs(y - height * 0.45) / (height * 0.55)
         alpha = int(min(t * 60, 60))
         draw.line([(0, y), (width, y)], fill=(0, 0, 0, alpha))
     bg = Image.alpha_composite(bg, gradient)
 
-    # Scale cutout: 70% of frame height, maintain aspect ratio
+    # Scale cutout to fit: 70% of frame height, maintain aspect ratio
     max_h = int(height * 0.70)
     max_w = int(width * 0.85)
     cw, ch = cutout.size
@@ -2450,20 +2452,81 @@ def prep_video_frame(
     # Convert to RGB (no alpha for video frame)
     frame = bg.convert("RGB")
 
+    # Save to R2 if save_key provided
     buf = BytesIO()
     frame.save(buf, format="PNG", optimize=True)
     png_bytes = buf.getvalue()
 
-    # Save to R2 if save_key provided
     if save_key:
         bucket = os.environ.get("R2_BUCKET")
         if bucket:
             try:
                 s3 = r2_client()
-                s3.put_object(Bucket=bucket, Key=save_key, Body=png_bytes,
-                              ContentType="image/png")
-            except Exception:
-                pass  # Non-fatal
+                s3.put_object(Bucket=bucket, Key=save_key, Body=png_bytes, ContentType="image/png")
+            except Exception as e:
+                pass  # Non-fatal — frame still returned
 
     return Response(content=png_bytes, media_type="image/png",
                     headers={"X-Save-Key": save_key or "none"})
+
+
+# ---------- /prep-post-image ----------
+@app.get("/prep-post-image")
+def prep_post_image(
+    hero_key: str,
+    save_key: str = "",
+    style: str = "gradient",
+    theme: str = "teal",
+    width: int = 1080,
+    height: int = 1080,
+    brand: str = "",
+    model: str = "",
+    size: str = "",
+    bg_mode: str = "gradient",
+):
+    """
+    Compose a social-post image: product cutout on themed background at 1:1.
+    Downloads cutout from R2 via hero_key, centres on themed bg,
+    saves to R2 at save_key, returns JSON with r2_url.
+    """
+    # 1. Load cutout from R2
+    data = r2_get_object_bytes(hero_key)
+    cutout = Image.open(BytesIO(data)).convert("RGBA")
+    cutout = trim_transparent(cutout, pad=0)
+
+    # 2. Build background — reuse themed bg from P1/P2
+    bg_full = load_bg(theme)
+    bg = bg_full.resize((width, height), Image.LANCZOS)
+
+    # 3. Scale cutout to fit: 65% of height, maintain aspect ratio
+    max_h = int(height * 0.65)
+    max_w = int(width * 0.85)
+    cw, ch = cutout.size
+    scale = min(max_w / cw, max_h / ch)
+    new_w, new_h = int(cw * scale), int(ch * scale)
+    cutout_resized = cutout.resize((new_w, new_h), Image.LANCZOS)
+
+    # 4. Centre on canvas
+    x = (width - new_w) // 2
+    y = (height - new_h) // 2
+    bg.paste(cutout_resized, (x, y), cutout_resized)
+
+    # 5. Save to R2
+    frame = bg.convert("RGB")
+    buf = BytesIO()
+    frame.save(buf, format="PNG", optimize=True)
+    png_bytes = buf.getvalue()
+
+    r2_url = ""
+    if save_key:
+        bucket = os.environ.get("R2_BUCKET")
+        if bucket:
+            try:
+                s3 = r2_client()
+                s3.put_object(Bucket=bucket, Key=save_key, Body=png_bytes, ContentType="image/png")
+                r2_url = f"https://rerender-clean-studio.onrender.com/r2/get-image?key={save_key}"
+            except Exception:
+                pass
+
+    # 6. Return JSON (TG: Send Post expects $json.r2_url)
+    return {"ok": True, "r2_url": r2_url, "save_key": save_key}
