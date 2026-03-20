@@ -2512,9 +2512,9 @@ def prep_post_image(
     bg_full = load_bg(theme)
     bg = bg_full.resize((width, height), Image.LANCZOS)
 
-    # 3. Scale cutout to fit: 65% of height, maintain aspect ratio
-    max_h = int(height * 0.65)
-    max_w = int(width * 0.85)
+    # 3. Scale cutout to fit: 82% of height, fill the square
+    max_h = int(height * 0.82)
+    max_w = int(width * 0.92)
     cw, ch = cutout.size
     scale = min(max_w / cw, max_h / ch)
     new_w, new_h = int(cw * scale), int(ch * scale)
