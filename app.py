@@ -1277,7 +1277,7 @@ def _render_p5(
         bg_draw  = ImageDraw.Draw(bot_grad)
         bot_h    = int(H * P5_GRAD_BOTTOM_H)
         for y in range(bot_h):
-            a = int(210 * (y / bot_h) ** 1.6)
+            a = int(140 * (y / bot_h) ** 1.6)
             bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
         canvas.alpha_composite(bot_grad)
 
@@ -1286,7 +1286,7 @@ def _render_p5(
         tg_draw  = ImageDraw.Draw(top_grad)
         top_h    = int(H * P5_GRAD_TOP_H)
         for y in range(top_h):
-            a = int(170 * (1 - y / top_h) ** 1.8)
+            a = int(100 * (1 - y / top_h) ** 1.8)
             tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
         canvas.alpha_composite(top_grad)
         draw = ImageDraw.Draw(canvas)
