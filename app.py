@@ -734,6 +734,64 @@ def render_p2(key: str = Query(...)):
 
 
 # =====================================================================
+# P3 Specs Auto-Extraction from specs_paste
+# Parses the first row of a multi-model spec text to extract
+# gear_ratio, max_drag, weight for P3's single-model spec table.
+# =====================================================================
+
+def _extract_p3_specs_from_paste(raw: str) -> dict:
+    """
+    Parse specs_paste text and extract gear_ratio, max_drag, weight
+    from the first data row. Handles formats like:
+      "1000 | BB:5+1 | Ratio:5.1:1 | Wt:220g | Drag:6kg"
+      "Model BB Ratio Weight Drag\\n1000 5+1 5.1:1 220g 6kg"
+    Returns dict with keys: gear_ratio, max_drag, weight, bearings
+    """
+    result = {}
+    lines = [l.strip() for l in raw.strip().split("\n") if l.strip()]
+    if not lines:
+        return result
+
+    # Strategy 1: Key:Value format (from scraper E1)
+    # e.g. "1000 | BB:5+1 | Ratio:5.1:1 | Wt:220g | Drag:6kg"
+    for line in lines:
+        parts = re.split(r"\s*\|\s*", line)
+        for part in parts:
+            kv = part.split(":", 1)
+            if len(kv) == 2:
+                k, v = kv[0].strip().lower(), kv[1].strip()
+                if k in ("ratio", "gear_ratio", "gear ratio", "nisbah", "nisbah gear"):
+                    result.setdefault("gear_ratio", v)
+                elif k in ("drag", "max_drag", "max drag", "seretan", "seretan max"):
+                    result.setdefault("max_drag", v)
+                elif k in ("wt", "weight", "berat", "reel wt", "reel weight"):
+                    result.setdefault("weight", v)
+                elif k in ("bb", "bearings", "bearing"):
+                    result.setdefault("bearings", v)
+
+    if result:
+        return result
+
+    # Strategy 2: Try to parse from _parse_specs_paste (reuse P6 parser)
+    try:
+        specs_data = _parse_specs_paste(raw)
+        if specs_data:
+            first = specs_data[0]
+            if first.get("ratio"):
+                result["gear_ratio"] = first["ratio"]
+            if first.get("drag"):
+                result["max_drag"] = first["drag"]
+            if first.get("wt"):
+                result["weight"] = first["wt"]
+            if first.get("bb"):
+                result["bearings"] = first["bb"]
+    except Exception:
+        pass
+
+    return result
+
+
+# =====================================================================
 # /render/p3 — Spec Card (Technical Validation Slide)
 # Layout: Brand + Model header, size-range badge, hero (55% height),
 #         3 highlight chips (BB · gear ratio · max drag), spec table
@@ -998,6 +1056,7 @@ def render_p3(
     max_drag:      str = Query("\u2014"),
     weight:        str = Query("\u2014"),
     line_capacity: str = Query("\u2014"),        # accepted but not rendered (varies per size)
+    specs_paste:   str = Query(""),              # multi-model specs text; auto-extracts gear_ratio/max_drag/weight if individual fields are dashes
 ):
     """
     P3 — spec card. Themed background, brand/model header, size-range
@@ -1005,7 +1064,27 @@ def render_p3(
     (Gear Ratio / Max Drag / Weight).
     chip3 = max drag range shown as scannable chip.
     line_capacity accepted for forward-compat but not rendered.
+
+    If specs_paste is provided and individual spec fields are still default
+    dashes, auto-extracts from the first spec row in specs_paste.
     """
+    # Auto-extract from specs_paste if individual fields are dashes
+    if specs_paste and specs_paste.strip():
+        _extracted = _extract_p3_specs_from_paste(specs_paste)
+        if gear_ratio == "\u2014" and _extracted.get("gear_ratio"):
+            gear_ratio = _extracted["gear_ratio"]
+        if max_drag == "\u2014" and _extracted.get("max_drag"):
+            max_drag = _extracted["max_drag"]
+        if weight == "\u2014" and _extracted.get("weight"):
+            weight = _extracted["weight"]
+        # Also auto-fill chips from specs if they're defaults
+        if chip1 == "3BB" and _extracted.get("bearings"):
+            chip1 = _extracted["bearings"]
+        if chip2 == "5.1:1" and _extracted.get("gear_ratio"):
+            chip2 = _extracted["gear_ratio"]
+        if chip3 == "6 kg" and _extracted.get("max_drag"):
+            chip3 = _extracted["max_drag"]
+
     hero = _load_hero(key)
     png  = _render_p3(
         hero, theme, brand, model, chip1, chip2, chip3,
