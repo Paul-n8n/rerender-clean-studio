@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from io import BytesIO
 from typing import List, Optional
 
@@ -8,6 +9,9 @@ from botocore.config import Config
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
+import httpx
+
+log = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -2593,3 +2597,77 @@ def prep_post_image(
 
     # 6. Return JSON (TG: Send Post expects $json.r2_url)
     return {"ok": True, "r2_url": r2_url, "save_key": save_key}
+
+
+# =====================================================================
+# /remove-bg — Background Removal Utility
+# Fetches image from URL, removes background using rembg, returns
+# transparent PNG. Used by Supplier Scraper to convert website product
+# photos into compositor-ready cutouts.
+# =====================================================================
+
+_rembg_session = None
+
+def _get_rembg_session():
+    """Lazy-load rembg session (downloads model on first call)."""
+    global _rembg_session
+    if _rembg_session is None:
+        try:
+            from rembg import new_session
+            _rembg_session = new_session("u2netp")
+            log.info("rembg session loaded (u2netp)")
+        except ImportError:
+            raise HTTPException(status_code=500, detail="rembg not installed")
+    return _rembg_session
+
+
+@app.get("/remove-bg")
+def remove_bg_get(url: str = Query(..., description="Image URL to remove background from")):
+    """
+    GET /remove-bg?url=<image_url>
+    Downloads image from URL, removes background, returns transparent PNG.
+    Uses u2netp model (fast, lightweight).
+    """
+    from rembg import remove
+
+    # 1. Fetch image
+    try:
+        resp = httpx.get(url, timeout=30.0, follow_redirects=True,
+                         headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch image: {e}")
+
+    # 2. Open and remove background
+    try:
+        img = Image.open(BytesIO(resp.content)).convert("RGBA")
+        session = _get_rembg_session()
+        result = remove(img, session=session)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Background removal failed: {e}")
+
+    # 3. Return transparent PNG
+    buf = BytesIO()
+    result.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
+
+
+@app.post("/remove-bg")
+async def remove_bg_post(file: UploadFile = File(...)):
+    """
+    POST /remove-bg (multipart file upload)
+    Removes background from uploaded image, returns transparent PNG.
+    """
+    from rembg import remove
+
+    data = await file.read()
+    try:
+        img = Image.open(BytesIO(data)).convert("RGBA")
+        session = _get_rembg_session()
+        result = remove(img, session=session)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Background removal failed: {e}")
+
+    buf = BytesIO()
+    result.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
