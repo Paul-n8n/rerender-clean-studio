@@ -426,6 +426,33 @@ async def r2_upload(key: str, file: UploadFile = File(...)):
     return {"ok": True, "key": key, "size": len(data)}
 
 
+@app.get("/r2/upload-from-url")
+def r2_upload_from_url(source_url: str, key: str):
+    """Download image from URL and upload to R2. Used by URL import pipeline."""
+    import httpx
+    try:
+        resp = httpx.get(source_url, timeout=30, follow_redirects=True, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Download failed: {e}")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"Download returned {resp.status_code}")
+    data = resp.content
+    if not data or len(data) < 1000:
+        raise HTTPException(status_code=400, detail="Downloaded file too small or empty")
+    bucket = os.environ.get("R2_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=500, detail="Missing R2_BUCKET")
+    s3 = r2_client()
+    content_type = resp.headers.get("content-type", "image/jpeg")
+    try:
+        s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType=content_type)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"R2 upload failed: {e}")
+    return {"ok": True, "key": key, "size": len(data)}
+
+
 @app.get("/r2/get-image")
 def get_image(key: str):
     data = r2_get_object_bytes(key)
