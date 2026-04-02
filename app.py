@@ -1370,50 +1370,35 @@ def _render_p5(
     pad       = 48
     top_pad   = 36
 
-    if is_inhand:
-        # ── Full-bleed photo mode ──────────────────────────────────────
+    # Detect if "in-hand" photo is actually a bg-removed cutout
+    # If so, treat it as composite mode (themed bg) instead of full-bleed
+    hero_has_transparency = hero.convert("RGBA").getchannel("A").getextrema()[0] < 200
+    use_fullbleed = is_inhand and not hero_has_transparency
+
+    if use_fullbleed:
+        # ── Full-bleed photo mode (opaque in-hand photo) ───────────────
         hero_rgba = hero.convert("RGBA")
-        # Feather alpha edges to soften cutout artifacts
-        if hero_rgba.getchannel("A").getextrema()[0] < 250:
-            r, g, b, a = hero_rgba.split()
-            a = a.filter(ImageFilter.GaussianBlur(radius=3))
-            hero_rgba = Image.merge("RGBA", (r, g, b, a))
-        scaled = _scale_to_cover(hero_rgba, W, H)
-        # Check if photo has significant transparency (bg-removed cutout)
-        # If so, use white base so remove.bg edge artifacts blend in
-        alpha_min = scaled.getchannel("A").getextrema()[0]
-        if alpha_min < 200:
-            # Cutout with transparency — white background hides edge fringe
-            canvas = Image.new("RGBA", (W, H), (255, 255, 255, 255))
-            canvas.alpha_composite(scaled)
-            draw = ImageDraw.Draw(canvas)
-            tc = get_theme_colors(theme)
-            text_color = tc["text"]  # dark text on white bg
-        else:
-            # Opaque photo (actual in-hand shot) — keep dark gradients
-            canvas = scaled
-            draw   = ImageDraw.Draw(canvas)
-            text_color = (255, 255, 255, 255)
+        canvas = _scale_to_cover(hero_rgba, W, H)
+        draw   = ImageDraw.Draw(canvas)
+        text_color = (255, 255, 255, 255)
 
-        # Dark gradients only for opaque photos (not bg-removed cutouts)
-        if alpha_min >= 200:
-            # Bottom gradient
-            bot_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            bg_draw  = ImageDraw.Draw(bot_grad)
-            bot_h    = int(H * P5_GRAD_BOTTOM_H)
-            for y in range(bot_h):
-                a = int(140 * (y / bot_h) ** 1.6)
-                bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
-            canvas.alpha_composite(bot_grad)
+        # Bottom gradient
+        bot_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        bg_draw  = ImageDraw.Draw(bot_grad)
+        bot_h    = int(H * P5_GRAD_BOTTOM_H)
+        for y in range(bot_h):
+            a = int(140 * (y / bot_h) ** 1.6)
+            bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
+        canvas.alpha_composite(bot_grad)
 
-            # Top gradient
-            top_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            tg_draw  = ImageDraw.Draw(top_grad)
-            top_h    = int(H * P5_GRAD_TOP_H)
-            for y in range(top_h):
-                a = int(100 * (1 - y / top_h) ** 1.8)
-                tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
-            canvas.alpha_composite(top_grad)
+        # Top gradient
+        top_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        tg_draw  = ImageDraw.Draw(top_grad)
+        top_h    = int(H * P5_GRAD_TOP_H)
+        for y in range(top_h):
+            a = int(100 * (1 - y / top_h) ** 1.8)
+            tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+        canvas.alpha_composite(top_grad)
         draw = ImageDraw.Draw(canvas)
 
     else:
