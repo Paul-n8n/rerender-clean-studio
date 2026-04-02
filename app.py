@@ -21,7 +21,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-03-16c"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-02a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
