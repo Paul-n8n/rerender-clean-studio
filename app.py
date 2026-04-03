@@ -620,34 +620,36 @@ def _draw_diagonal_stripe(canvas: Image.Image, W: int, H: int, tc: dict):
 
 def _draw_outlined_badge(draw: ImageDraw.ImageDraw, text: str, x1: int, y0: int,
                          font, border_color, text_color):
-    """Draw an outlined rounded pill badge (no fill) anchored at top-right."""
-    px, py = 18, 8
+    """Draw an outlined rounded pill badge. Mockup: pad 4/14 → 10/35, border 1.5→4."""
+    px, py = 35, 10  # mockup: padding 14px/4px → 35/10
     tw, th = text_size(draw, text, font)
     bw, bh = tw + px * 2, th + py * 2
     bx0 = x1 - bw
     by1 = y0 + bh
     draw.rounded_rectangle((bx0, y0, x1, by1), radius=bh // 2,
-                           outline=border_color, width=2)
+                           outline=border_color, width=4)  # mockup: 1.5px → 4
     draw_text_centered_in_box(draw, bx0, y0, bw, bh, text, font, text_color)
 
 
 def _draw_stats_bar(canvas: Image.Image, y_top: int, W: int,
                     bearings: str, gear_ratio: str, max_drag: str, tc: dict):
-    """Draw a 3-column stats bar (Bearings / Gear Ratio / Max Drag)."""
-    draw = ImageDraw.Draw(canvas)
-    pad_x = 14
-    gap = 4
+    """Draw a 3-column stats bar. Dimensions from mockup ×2.5:
+    left/right 14→35, gap 4→10, stat-val 19→48px, stat-lbl 7→18px,
+    pill padding 7→18, border-radius 5→13.
+    """
+    pad_x = 35
+    gap = 10
     bar_w = W - pad_x * 2
     pill_w = (bar_w - gap * 2) // 3
-    pill_h = 44
-    radius = 5
+    pill_h = 95       # mockup stat area ~38px → 95
+    radius = 13
 
     stat_bg = tc.get("stat_bg", (255, 255, 255, 18))
     stat_val_color = tc.get("stat_val", (245, 204, 74, 255))
     stat_lbl_color = tc.get("stat_lbl", (255, 255, 255, 102))
 
-    val_font = load_font_bold(24)
-    lbl_font = load_font_bold(10)
+    val_font = load_font_bold(48)    # mockup: 19px → 48
+    lbl_font = load_font_bold(18)    # mockup: 7px → 18
 
     stats = [
         (bearings or "\u2014", "BEARINGS"),
@@ -662,13 +664,15 @@ def _draw_stats_bar(canvas: Image.Image, y_top: int, W: int,
         px0 = pad_x + i * (pill_w + gap)
         od.rounded_rectangle((px0, y_top, px0 + pill_w, y_top + pill_h),
                              radius=radius, fill=stat_bg)
+        # Value (centered, upper portion)
         vw, vh = text_size(od, val, val_font)
         vx = px0 + (pill_w - vw) // 2
-        vy = y_top + 6
+        vy = y_top + 10
         od.text((vx, vy), val, font=val_font, fill=stat_val_color)
+        # Label (centered, below value)
         lw, lh = text_size(od, lbl, lbl_font)
         lx = px0 + (pill_w - lw) // 2
-        ly = y_top + pill_h - lh - 6
+        ly = y_top + pill_h - lh - 10
         od.text((lx, ly), lbl, font=lbl_font, fill=stat_lbl_color)
 
     canvas.alpha_composite(overlay)
@@ -691,30 +695,31 @@ def _render_product(
 ) -> bytes:
     """Compose a 1000x1000 P1 product card (K + Hybrid Mix design).
 
-    Two visual modes auto-selected:
-      P1-A (Hybrid Mix)  — when no stats data. Budget reels.
-      P1-B (Pro Series)  — when bearings/gear_ratio/max_drag provided.
-                           Adds ghost watermark + stats bar.
+    All dimensions scaled exactly from the 400px HTML mockup (×2.5).
+    P1-A = no stats (budget), P1-B = with stats bar (mid-premium).
     """
     W, H = 1000, 1000
     tc = get_theme_colors(theme)
     text_color = tc["text"]
     accent = tc.get("accent", (245, 204, 74, 255))
 
-    # ── 0. Gradient background (from mockup) ─────────────────────────
+    # ── 0. Gradient background ───────────────────────────────────────
     grad_start = tc.get("p1_grad_start", (13, 92, 92))
     grad_end = tc.get("p1_grad_end", (7, 56, 56))
     canvas = _make_gradient_bg_fast(W, H, grad_start, grad_end)
     draw = ImageDraw.Draw(canvas)
 
     has_stats = any(s.strip() for s in [bearings, gear_ratio, max_drag])
-    pad = 56
-    top_pad = 44
-    CTA_H = 42
-    STATS_H = 48 if has_stats else 0
-    STATS_GAP = 6 if has_stats else 0
 
-    # ── 1. Gold top accent line (gradient: transparent edges → solid center)
+    # ── Exact dimensions from 400px mockup × 2.5 ────────────────────
+    LEFT   = 55       # mockup: left 22px
+    TOP    = 45       # mockup: top 18px
+    RIGHT  = 55       # mockup: right 18px → from right edge
+    CTA_H  = 100      # mockup: height 40px
+    STATS_H  = 110 if has_stats else 0   # mockup: stat row ~44px from bottom
+    STATS_PAD = 35    # mockup: left/right 14px
+
+    # ── 1. Gold top accent line (3px mockup → 8px) ───────────────────
     top_accent_color = tc.get("top_accent", accent)
     accent_overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ad = ImageDraw.Draw(accent_overlay)
@@ -726,7 +731,7 @@ def _render_product(
             t = (W - x) / (W * 0.03)
         a = int(top_accent_color[3] * t)
         if a > 0:
-            ad.line([(x, 0), (x, 2)], fill=(top_accent_color[0], top_accent_color[1],
+            ad.line([(x, 0), (x, 7)], fill=(top_accent_color[0], top_accent_color[1],
                                              top_accent_color[2], a))
     canvas.alpha_composite(accent_overlay)
     draw = ImageDraw.Draw(canvas)
@@ -736,98 +741,103 @@ def _render_product(
     draw = ImageDraw.Draw(canvas)
 
     # ── 3. Ghost watermark (P1-B only) ───────────────────────────────
+    # mockup: font-size 170px → 425px, bottom 55px → 138px from bottom
     if has_stats:
         wm_color = tc.get("watermark", (255, 255, 255, 8))
-        wm_font = load_font_bold(180)
+        wm_font = load_font_bold(425)
         wm_text = (model or "").strip().upper()
         if wm_text:
             wm_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
             wm_draw = ImageDraw.Draw(wm_layer)
             ww, wh = text_size(wm_draw, wm_text, wm_font)
-            wm_draw.text((W - ww + 10, H - CTA_H - STATS_H - wh - 20),
+            wm_draw.text((W - ww + 25, H - CTA_H - STATS_H - wh + 20),
                          wm_text, font=wm_font, fill=wm_color)
             canvas.alpha_composite(wm_layer)
             draw = ImageDraw.Draw(canvas)
 
-    # ── 4. Brand text ────────────────────────────────────────────────
-    header_left = pad
-    header_top = top_pad
-
+    # ── 4. Brand text (mockup: 12px → 30px, weight 600, letter-spacing 3.5→9px)
     brand_text = (brand or "").strip().upper()
     brand_color = tc.get("brand_color", (255, 255, 255, 128))
     brand_font = load_font_regular(30)
     brand_h = text_size(draw, brand_text, brand_font)[1]
-    draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, brand_color)
+    draw_text_align_left(draw, LEFT, TOP, brand_text, brand_font, brand_color)
 
-    # ── 5. Gold accent line under brand ──────────────────────────────
-    accent_y = header_top + brand_h + 4
-    draw.rectangle([(header_left, accent_y), (header_left + 30, accent_y + 2)],
+    # ── 5. Gold accent line under brand (mockup: top 36 → 90, w 30 → 75, h 2.5 → 6)
+    accent_line_y = 90
+    draw.rectangle([(LEFT, accent_line_y), (LEFT + 75, accent_line_y + 6)],
                    fill=accent)
 
-    # ── 6. Model text (LARGE — fills left 60%) ──────────────────────
+    # ── 6. Model text (mockup: top 44 → 110, font 46px → 115px, weight 900)
     model_text = (model or "").strip().upper()
-    model_y = accent_y + 6
-    model_max_w = int(W * 0.60)
+    MODEL_Y = 110
+    model_max_w = int(W * 0.65)
     model_font, model_text = fit_text(draw, model_text, max_w=model_max_w,
-                                      start_size=180, min_size=70, loader=load_font_bold)
+                                      start_size=115, min_size=60, loader=load_font_bold)
     model_h = text_size(draw, model_text, model_font)[1]
-    draw_text_align_left(draw, header_left, model_y, model_text, model_font, text_color)
+    draw_text_align_left(draw, LEFT, MODEL_Y, model_text, model_font, text_color)
 
-    # ── 7. Outlined badge (top-right) ────────────────────────────────
+    # ── 7. Outlined badge (mockup: top 18 → 45, right 18 → 45, font 10 → 25, pad 4/14 → 10/35)
     size_text = (chip3 or "").strip()
     if size_text:
-        badge_font = load_font_bold(22)
+        badge_font = load_font_bold(25)
         badge_border = tc.get("badge_border", accent)
         badge_text_c = tc.get("badge_text", accent)
-        _draw_outlined_badge(draw, size_text, W - pad, top_pad + 8,
+        _draw_outlined_badge(draw, size_text, W - RIGHT, TOP + 5,
                              badge_font, badge_border, badge_text_c)
 
-    # ── 8. Feature chips (left-border style) ─────────────────────────
+    # ── 8. Feature chips ─────────────────────────────────────────────
+    # mockup: top 112 → 280, font 10 → 25, gap 5 → 13, pad 4/10 → 10/25, border 2.5 → 6
     features = [(chip1 or "").strip(), (chip2 or "").strip(),
                 (chip4 or "").strip(), (chip5 or "").strip()]
     features = [c for c in features if c]
 
-    chip_font = load_font_bold(22)
+    CHIP_FONT_SZ = 25
+    chip_font = load_font_bold(CHIP_FONT_SZ)
     chip_bg = tc.get("chip_bg", (255, 255, 255, 15))
     chip_border_color = tc.get("chip_border", accent)
     chip_text_color = tc.get("chip_text", (240, 240, 240, 255))
 
-    # Measure chips to compute hero positioning
+    # Measure chips for hero positioning
     chip_widths = []
     for c in features:
         tw, _ = text_size(draw, c, chip_font)
         chip_widths.append(tw)
     max_chip_w = max(chip_widths, default=0)
 
-    CHIP_HERO_GAP = 40
-    chip_right_edge = header_left + max_chip_w + 28 + CHIP_HERO_GAP if features else header_left
+    CHIP_PAD_X = 25   # mockup: padding 10px → 25
+    CHIP_PAD_Y = 10   # mockup: padding 4px → 10
+    CHIP_BORDER_W = 6 # mockup: border-left 2.5px → 6
+    CHIP_GAP = 13     # mockup: gap 5px → 13
+    chip_right_edge = LEFT + max_chip_w + CHIP_PAD_X * 2 + CHIP_BORDER_W + 40 if features else LEFT
 
     # ── 9. Hero sizing and placement ─────────────────────────────────
+    # mockup: top 68 → 170, right 22 → 55, 200×200 → 500×500
     hero_w, hero_h = hero.size
-    right_zone_w = W - chip_right_edge - 10
-    bottom_reserved = CTA_H + STATS_H + STATS_GAP
-    # Hero fills most of the vertical space (top area to bottom bars)
-    hero_avail_top = int(H * 0.08)
-    hero_avail_bottom = H - bottom_reserved - 10
-    hero_avail_h = hero_avail_bottom - hero_avail_top
-    TARGET_H_RATIO = 0.75 if not features else 0.70
-    target_h = int(hero_avail_h * TARGET_H_RATIO)
-    scale_h = target_h / hero_h
-    scale_w = right_zone_w / hero_w
+    HERO_RIGHT_MARGIN = RIGHT
+    hero_zone_left = chip_right_edge if features else int(W * 0.28)
+    hero_zone_right = W - HERO_RIGHT_MARGIN
+    hero_zone_w = hero_zone_right - hero_zone_left
+    HERO_TOP = 170    # mockup: top 68px → 170
+    hero_zone_bottom = H - CTA_H - STATS_H - 10
+    hero_zone_h = hero_zone_bottom - HERO_TOP
+
+    # Scale hero to fit zone (mockup hero = 50% of card = 500px at 1000)
+    target_sz = min(hero_zone_w, hero_zone_h, 550)
+    scale_h = target_sz / hero_h
+    scale_w = hero_zone_w / hero_w
     scale = min(scale_h, scale_w)
     new_w = max(1, int(hero_w * scale))
     new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Center hero in right zone
-    right_zone_center = chip_right_edge + right_zone_w // 2
-    px = right_zone_center - new_w // 2
-    px = max(px, chip_right_edge)
+    # Position: centered in hero zone
+    px = hero_zone_left + (hero_zone_w - new_w) // 2
+    px = max(px, hero_zone_left)
     px = min(px, W - new_w - 5)
-    # Vertically center hero in available space
-    py = hero_avail_top + (hero_avail_h - new_h) // 2
-    if py + new_h > hero_avail_bottom:
-        py = hero_avail_bottom - new_h
+    py = HERO_TOP + (hero_zone_h - new_h) // 2
+    if py + new_h > hero_zone_bottom:
+        py = hero_zone_bottom - new_h
+    py = max(py, HERO_TOP)
 
     # Glow + Hero composite
     draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2)
@@ -835,42 +845,38 @@ def _render_product(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # ── 10. Draw feature chips (vertically centered in card middle) ──
+    # ── 10. Draw feature chips (mockup: top 112 → 280) ──────────────
     if features:
-        CHIP_LINE_GAP = 10
-        chip_h = 34
-        total_chips_h = len(features) * chip_h + (len(features) - 1) * CHIP_LINE_GAP
-        # Position chips in the vertical middle of the card body
-        # (between model bottom and stats/CTA top), aligned with hero center
-        chips_zone_top = model_y + model_h + 30
-        chips_zone_bottom = H - bottom_reserved - 20
-        chip_start_y = chips_zone_top + (chips_zone_bottom - chips_zone_top - total_chips_h) // 2
-        # Clamp: don't go above model text bottom
-        chip_start_y = max(chip_start_y, model_y + model_h + 20)
+        CHIPS_TOP = 280   # mockup: top 112px → 280
+        chip_h = CHIP_FONT_SZ + CHIP_PAD_Y * 2
+        chip_start_y = CHIPS_TOP
 
         for c in features:
             tw, th = text_size(draw, c, chip_font)
-            cw = tw + 28
+            cw = tw + CHIP_PAD_X * 2 + CHIP_BORDER_W
             chip_overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
             cd = ImageDraw.Draw(chip_overlay)
             cd.rounded_rectangle(
-                (header_left, chip_start_y, header_left + cw, chip_start_y + chip_h),
-                radius=4, fill=chip_bg)
+                (LEFT, chip_start_y, LEFT + cw, chip_start_y + chip_h),
+                radius=10, fill=chip_bg)
             canvas.alpha_composite(chip_overlay)
             draw = ImageDraw.Draw(canvas)
+            # Left border accent
             draw.rectangle(
-                [(header_left, chip_start_y + 4),
-                 (header_left + 3, chip_start_y + chip_h - 4)],
+                [(LEFT, chip_start_y + 4),
+                 (LEFT + CHIP_BORDER_W, chip_start_y + chip_h - 4)],
                 fill=chip_border_color)
+            # Chip text
             text_y = chip_start_y + (chip_h - th) // 2
-            draw.text((header_left + 14, text_y), c, font=chip_font, fill=chip_text_color)
-            chip_start_y += chip_h + CHIP_LINE_GAP
+            draw.text((LEFT + CHIP_BORDER_W + CHIP_PAD_X - 5, text_y),
+                      c, font=chip_font, fill=chip_text_color)
+            chip_start_y += chip_h + CHIP_GAP
 
-    # ── 11. Bottom gradient fade ─────────────────────────────────────
+    # ── 11. Bottom gradient fade (mockup: height 30 → 75) ───────────
     fade = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     fd = ImageDraw.Draw(fade)
-    fade_h = 40
-    fade_top = H - CTA_H - STATS_H - STATS_GAP - fade_h
+    fade_h = 75
+    fade_top = H - CTA_H - STATS_H - fade_h
     for y in range(fade_h):
         a = int(26 * (y / fade_h))
         fd.line([(0, fade_top + y), (W, fade_top + y)], fill=(0, 0, 0, a))
@@ -878,16 +884,17 @@ def _render_product(
     draw = ImageDraw.Draw(canvas)
 
     # ── 12. Stats bar (P1-B only) ────────────────────────────────────
+    # mockup: bottom 44, left/right 14, gap 4, stat-val 19→48, stat-lbl 7→18
     if has_stats:
-        stats_y = H - CTA_H - STATS_H - 2
+        stats_y = H - CTA_H - STATS_H
         _draw_stats_bar(canvas, stats_y, W, bearings, gear_ratio, max_drag, tc)
         draw = ImageDraw.Draw(canvas)
 
-    # ── 13. Full-width CTA bar ───────────────────────────────────────
+    # ── 13. Full-width CTA bar (mockup: h 40 → 100, font 13 → 33) ──
     cta_bg = tc.get("cta_bg", (245, 204, 74, 255))
     cta_text_color = tc.get("cta_text", (17, 17, 17, 255))
     draw.rectangle([(0, H - CTA_H), (W, H)], fill=cta_bg)
-    cta_font = load_font_bold(20)
+    cta_font = load_font_bold(33)
     cta_full = "READY STOCK  \u25C6  FAST SHIP"
     cw, ch = text_size(draw, cta_full, cta_font)
     cx = (W - cw) // 2
