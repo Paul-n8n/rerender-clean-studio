@@ -46,16 +46,16 @@ THEME_COLORS = {
         "stat_lbl": (0, 0, 0, 160),
         "cta_bg": (26, 26, 26, 255),
         "cta_text": (245, 204, 74, 255),
-        "watermark": (0, 0, 0, 3),       # barely visible — yellow bg shows shadows easily
+        "watermark": (0, 0, 0, 8),
         "top_accent": (34, 34, 34, 255),
-        "stripe_fill": (0, 0, 0, 5),     # very subtle stripe on yellow
-        "stripe_line": (0, 0, 0, 10),    # very subtle line on yellow
+        "stripe_fill": (0, 0, 0, 13),
+        "stripe_line": (0, 0, 0, 26),
         "badge_border": (34, 34, 34, 255),
         "badge_text": (34, 34, 34, 255),
-        # P1 gradient bg: bright vibrant gold
-        "p1_grad_start": (240, 205, 10),
-        "p1_grad_end": (218, 186, 0),
-        "p1_glow": (0, 0, 0, 5),
+        # P1 gradient bg: linear-gradient(155deg, #d4b200, #e6c400 35%, #ccaa00 70%, #b89900)
+        "p1_grad_start": (212, 178, 0),
+        "p1_grad_end": (184, 153, 0),
+        "p1_glow": (0, 0, 0, 8),
     },
     "grey": {
         "text": (255, 255, 255, 255),
