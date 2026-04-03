@@ -838,9 +838,8 @@ def _render_product(
         new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Position: right-aligned with margin, vertically centered
-    px = W - HERO_RIGHT_MARGIN - new_w
-    px = max(px, int(W * 0.30))  # don't go too far left
+    # Position: centered horizontally in card, vertically centered in zone
+    px = (W - new_w) // 2
     py = HERO_TOP + (hero_zone_h - new_h) // 2
     if py + new_h > hero_zone_bottom:
         py = hero_zone_bottom - new_h
