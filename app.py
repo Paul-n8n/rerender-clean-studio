@@ -1481,7 +1481,7 @@ def _render_p4(
 
     # ── Feature body metrics ──────────────────────────────────────────
     body_text  = (feature_body or "").strip()
-    body_font  = load_font_regular(32)
+    body_font  = load_font_bold(32)
     body_lines = _wrap_lines_p4(draw, body_text, text_max_w, body_font)
     body_lh    = text_size(draw, "Ag", body_font)[1]
 
@@ -1492,13 +1492,13 @@ def _render_p4(
     draw = ImageDraw.Draw(canvas)
 
     # ── Left-side scrim: semi-transparent gradient so text is readable over hero ──
-    _scrim_w = int(W * 0.50)
+    _scrim_w = int(W * 0.55)
     _scrim = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     _scrim_draw = ImageDraw.Draw(_scrim)
     _grad_start = _tc.get("p1_grad_start", (13, 92, 92))
     for x in range(_scrim_w):
         frac = 1 - (x / _scrim_w)
-        a = int(200 * frac * frac)
+        a = int(240 * frac * frac)
         _scrim_draw.line([(x, 0), (x, H)], fill=(_grad_start[0], _grad_start[1], _grad_start[2], a))
     canvas.alpha_composite(_scrim)
     draw = ImageDraw.Draw(canvas)
@@ -1540,7 +1540,7 @@ def _render_p4(
     else:
         feat_y += title_h + 56
 
-    body_col = (text_color[0], text_color[1], text_color[2], 210)
+    body_col = (text_color[0], text_color[1], text_color[2], 255)
     for line in body_lines:
         draw_text_align_left(draw, pad, feat_y, line, body_font, body_col)
         feat_y += body_lh + 10
