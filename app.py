@@ -821,19 +821,26 @@ def _render_product(
     hero_zone_bottom = H - CTA_H - STATS_H - 10
     hero_zone_h = hero_zone_bottom - HERO_TOP
 
-    # Scale hero to fit zone (mockup hero = 50% of card = 500px at 1000)
-    target_sz = min(hero_zone_w, hero_zone_h, 550)
-    scale_h = target_sz / hero_h
-    scale_w = hero_zone_w / hero_w
-    scale = min(scale_h, scale_w)
+    # Hero must cover at least 1/3 of card area visually.
+    # Allow hero to extend left behind chips (rendered behind text, z-order).
+    # Use full right 65% of card as hero zone for sizing.
+    hero_size_zone_w = int(W * 0.65)
+    hero_size_zone_h = hero_zone_h
+    MIN_HERO = 600    # minimum hero dimension — ensures 1/3 coverage
+    target_sz = max(min(hero_size_zone_w, hero_size_zone_h), MIN_HERO)
+    scale = target_sz / max(hero_w, hero_h)
     new_w = max(1, int(hero_w * scale))
     new_h = max(1, int(hero_h * scale))
+    # Clamp: don't exceed available height
+    if new_h > hero_zone_h:
+        scale = hero_zone_h / hero_h
+        new_w = max(1, int(hero_w * scale))
+        new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Position: centered in hero zone
-    px = hero_zone_left + (hero_zone_w - new_w) // 2
-    px = max(px, hero_zone_left)
-    px = min(px, W - new_w - 5)
+    # Position: right-aligned with margin, vertically centered
+    px = W - HERO_RIGHT_MARGIN - new_w
+    px = max(px, int(W * 0.30))  # don't go too far left
     py = HERO_TOP + (hero_zone_h - new_h) // 2
     if py + new_h > hero_zone_bottom:
         py = hero_zone_bottom - new_h
