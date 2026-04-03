@@ -898,7 +898,7 @@ def _render_product(
     cta_full = "READY STOCK  \u25C6  FAST SHIP"
     cw, ch = text_size(draw, cta_full, cta_font)
     cx = (W - cw) // 2
-    cy = H - CTA_H + (CTA_H - ch) // 2
+    cy = H - CTA_H + (CTA_H - ch) // 2 - 4  # nudge up for visual center
     draw.text((cx, cy), cta_full, font=cta_font, fill=cta_text_color)
 
     out = BytesIO()
