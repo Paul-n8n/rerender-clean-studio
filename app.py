@@ -1114,7 +1114,8 @@ def _render_p3(
     Line capacity omitted — varies per size variant.
     """
     W, H = 1024, 1024
-    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+    _tc = get_theme_colors(theme)
+    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
     draw   = ImageDraw.Draw(canvas)
 
     tc              = get_theme_colors(theme)
@@ -1422,7 +1423,8 @@ def _render_p4(
 ) -> bytes:
     """Compose a 1024×1024 P4 Feature Highlight card and return raw PNG bytes."""
     W, H   = 1024, 1024
-    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+    _tc = get_theme_colors(theme)
+    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
     draw   = ImageDraw.Draw(canvas)
 
     tc         = get_theme_colors(theme)
@@ -1682,7 +1684,8 @@ def _render_p5(
     else:
         # ── Composite mode (fallback cutout on themed background) ──────
         # Use themed bg so cutout edge anti-aliasing blends correctly
-        canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+        _tc = get_theme_colors(theme)
+    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
         draw   = ImageDraw.Draw(canvas)
         tc         = get_theme_colors(theme)
         text_color = tc["text"]
@@ -2085,7 +2088,8 @@ def _render_p6(
     is_dark    = (theme or "").lower() in _P3_DARK_THEMES
 
     # ── Background ────────────────────────────────────────────────────
-    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+    _tc = get_theme_colors(theme)
+    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
 
     # ── Ghost reel watermark (same approach as P8) ────────────────────
     if watermark_img is not None:
@@ -2430,7 +2434,8 @@ def _render_p7(
 
     else:
         # Theme background
-        canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+        _tc = get_theme_colors(theme)
+    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
         tc         = get_theme_colors(theme)
         text_color = tc["text"]
 
@@ -2650,7 +2655,8 @@ def _render_p8(
     text_color = tc["text"]
 
     # ── Background ────────────────────────────────────────────────────
-    canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
+    _tc = get_theme_colors(theme)
+    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
 
     # Radial glow — right-side depth
     draw_radial_glow(canvas, W * 2 // 3, H // 2)
@@ -2918,9 +2924,9 @@ def prep_post_image(
     cutout = Image.open(BytesIO(data)).convert("RGBA")
     cutout = trim_transparent(cutout, pad=0)
 
-    # 2. Build background — reuse themed bg from P1/P2
-    bg_full = load_bg(theme)
-    bg = bg_full.resize((width, height), Image.LANCZOS)
+    # 2. Build background — gradient bg matching P1 design
+    _tc = get_theme_colors(theme)
+    bg = _make_gradient_bg_fast(width, height, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
 
     # 3. Scale cutout to fit: 82% of height, fill the square
     max_h = int(height * 0.82)
