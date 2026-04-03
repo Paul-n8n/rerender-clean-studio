@@ -1471,8 +1471,8 @@ def _render_p4(
     # ── Feature tag pill metrics ──────────────────────────────────────
     tag_text = (feature_tag or "").strip()
     tag_font = load_font_bold(32)
-    tag_bg   = STICKER_FILL              if is_dark else (20, 20, 20, 220)
-    tag_fg   = STICKER_TEXT              if is_dark else (255, 255, 255, 255)
+    tag_bg   = STICKER_FILL              if is_dark else STICKER_FILL
+    tag_fg   = STICKER_TEXT              if is_dark else STICKER_TEXT
     tag_w = tag_h = 0
     if tag_text:
         tw, th = text_size(draw, tag_text, tag_font)
@@ -1532,6 +1532,10 @@ def _render_p4(
         ty0 = title_bottom + gap_above
         tx1, ty1 = tx0 + tag_w, ty0 + tag_h
         draw_rounded_rect(draw, (tx0, ty0, tx1, ty1), radius=8, fill=tag_bg)
+        try:
+            draw.rounded_rectangle((tx0, ty0, tx1, ty1), radius=8, outline=(20, 20, 20, 200), width=3)
+        except Exception:
+            pass
         # Centre text inside pill using anchor='mm'
         pill_cx = tx0 + tag_w // 2
         pill_cy = ty0 + tag_h // 2
