@@ -752,12 +752,10 @@ def _render_product(
     # ── 4. Brand text ────────────────────────────────────────────────
     header_left = pad
     header_top = top_pad
-    header_max_w = int(W * 0.55) - header_left
 
     brand_text = (brand or "").strip().upper()
     brand_color = tc.get("brand_color", (255, 255, 255, 128))
-    brand_font, brand_text = fit_text(draw, brand_text, max_w=header_max_w,
-                                      start_size=32, min_size=20, loader=load_font_regular)
+    brand_font = load_font_regular(30)
     brand_h = text_size(draw, brand_text, brand_font)[1]
     draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, brand_color)
 
@@ -766,11 +764,12 @@ def _render_product(
     draw.rectangle([(header_left, accent_y), (header_left + 30, accent_y + 2)],
                    fill=accent)
 
-    # ── 6. Model text ────────────────────────────────────────────────
+    # ── 6. Model text (LARGE — fills left 60%) ──────────────────────
     model_text = (model or "").strip().upper()
-    model_y = accent_y + 8
-    model_font, model_text = fit_text(draw, model_text, max_w=header_max_w,
-                                      start_size=120, min_size=50, loader=load_font_bold)
+    model_y = accent_y + 6
+    model_max_w = int(W * 0.60)
+    model_font, model_text = fit_text(draw, model_text, max_w=model_max_w,
+                                      start_size=180, min_size=70, loader=load_font_bold)
     model_h = text_size(draw, model_text, model_font)[1]
     draw_text_align_left(draw, header_left, model_y, model_text, model_font, text_color)
 
@@ -788,7 +787,7 @@ def _render_product(
                 (chip4 or "").strip(), (chip5 or "").strip()]
     features = [c for c in features if c]
 
-    chip_font = load_font_bold(20)
+    chip_font = load_font_bold(22)
     chip_bg = tc.get("chip_bg", (255, 255, 255, 15))
     chip_border_color = tc.get("chip_border", accent)
     chip_text_color = tc.get("chip_text", (240, 240, 240, 255))
@@ -801,15 +800,18 @@ def _render_product(
     max_chip_w = max(chip_widths, default=0)
 
     CHIP_HERO_GAP = 40
-    chip_right_edge = header_left + max_chip_w + 26 + CHIP_HERO_GAP if features else header_left
+    chip_right_edge = header_left + max_chip_w + 28 + CHIP_HERO_GAP if features else header_left
 
     # ── 9. Hero sizing and placement ─────────────────────────────────
     hero_w, hero_h = hero.size
-    # Hero occupies right portion of card; if no chips, hero can go wider
     right_zone_w = W - chip_right_edge - 10
     bottom_reserved = CTA_H + STATS_H + STATS_GAP
-    TARGET_H_RATIO = 0.60 if has_stats else 0.70
-    target_h = int(H * TARGET_H_RATIO)
+    # Hero fills most of the vertical space (top area to bottom bars)
+    hero_avail_top = int(H * 0.08)
+    hero_avail_bottom = H - bottom_reserved - 10
+    hero_avail_h = hero_avail_bottom - hero_avail_top
+    TARGET_H_RATIO = 0.75 if not features else 0.70
+    target_h = int(hero_avail_h * TARGET_H_RATIO)
     scale_h = target_h / hero_h
     scale_w = right_zone_w / hero_w
     scale = min(scale_h, scale_w)
@@ -817,35 +819,38 @@ def _render_product(
     new_h = max(1, int(hero_h * scale))
     hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Center hero in right zone, biased slightly left (30%)
-    right_zone_center = chip_right_edge + int(right_zone_w * 0.45)
+    # Center hero in right zone
+    right_zone_center = chip_right_edge + right_zone_w // 2
     px = right_zone_center - new_w // 2
     px = max(px, chip_right_edge)
-    px = min(px, W - new_w - 10)
-    # Vertically: center in available space between model text and bottom reserve
-    avail_top = model_y + model_h + 10
-    avail_bottom = H - bottom_reserved - 10
-    py = avail_top + (avail_bottom - avail_top - new_h) // 2
-    py = max(py, int(H * 0.12))
-    if py + new_h > avail_bottom:
-        py = avail_bottom - new_h
+    px = min(px, W - new_w - 5)
+    # Vertically center hero in available space
+    py = hero_avail_top + (hero_avail_h - new_h) // 2
+    if py + new_h > hero_avail_bottom:
+        py = hero_avail_bottom - new_h
 
     # Glow + Hero composite
-    glow_color = tc.get("p1_glow", (255, 255, 255, 13))
     draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2)
     draw = ImageDraw.Draw(canvas)
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # ── 10. Draw feature chips ───────────────────────────────────────
+    # ── 10. Draw feature chips (vertically centered in card middle) ──
     if features:
-        chip_start_y = model_y + model_h + 24
-        CHIP_LINE_GAP = 8
-        chip_h = 30
+        CHIP_LINE_GAP = 10
+        chip_h = 34
+        total_chips_h = len(features) * chip_h + (len(features) - 1) * CHIP_LINE_GAP
+        # Position chips in the vertical middle of the card body
+        # (between model bottom and stats/CTA top), aligned with hero center
+        chips_zone_top = model_y + model_h + 30
+        chips_zone_bottom = H - bottom_reserved - 20
+        chip_start_y = chips_zone_top + (chips_zone_bottom - chips_zone_top - total_chips_h) // 2
+        # Clamp: don't go above model text bottom
+        chip_start_y = max(chip_start_y, model_y + model_h + 20)
 
         for c in features:
             tw, th = text_size(draw, c, chip_font)
-            cw = tw + 24
+            cw = tw + 28
             chip_overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
             cd = ImageDraw.Draw(chip_overlay)
             cd.rounded_rectangle(
@@ -854,8 +859,8 @@ def _render_product(
             canvas.alpha_composite(chip_overlay)
             draw = ImageDraw.Draw(canvas)
             draw.rectangle(
-                [(header_left, chip_start_y + 3),
-                 (header_left + 3, chip_start_y + chip_h - 3)],
+                [(header_left, chip_start_y + 4),
+                 (header_left + 3, chip_start_y + chip_h - 4)],
                 fill=chip_border_color)
             text_y = chip_start_y + (chip_h - th) // 2
             draw.text((header_left + 14, text_y), c, font=chip_font, fill=chip_text_color)
