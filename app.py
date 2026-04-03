@@ -43,7 +43,7 @@ THEME_COLORS = {
         "chip_border": (34, 34, 34, 255),
         "stat_bg": (0, 0, 0, 13),
         "stat_val": (34, 34, 34, 255),
-        "stat_lbl": (0, 0, 0, 77),
+        "stat_lbl": (0, 0, 0, 150),
         "cta_bg": (26, 26, 26, 255),
         "cta_text": (245, 204, 74, 255),
         "watermark": (0, 0, 0, 8),
@@ -52,9 +52,9 @@ THEME_COLORS = {
         "stripe_line": (0, 0, 0, 26),
         "badge_border": (34, 34, 34, 255),
         "badge_text": (34, 34, 34, 255),
-        # P1 gradient bg: linear-gradient(155deg, #d4b200, #e6c400 35%, #ccaa00 70%, #b89900)
-        "p1_grad_start": (212, 178, 0),
-        "p1_grad_end": (184, 153, 0),
+        # P1 gradient bg: brighter gold matching mockup
+        "p1_grad_start": (230, 196, 0),
+        "p1_grad_end": (204, 170, 0),
         "p1_glow": (0, 0, 0, 8),
     },
     "grey": {
