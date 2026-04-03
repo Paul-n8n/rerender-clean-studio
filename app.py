@@ -38,7 +38,7 @@ THEME_COLORS = {
         "divider": (80, 80, 80, 180),
         "sticker_outline": (20, 20, 20, 255),
         "accent": (34, 34, 34, 255),
-        "brand_color": (0, 0, 0, 90),
+        "brand_color": (0, 0, 0, 180),
         "chip_bg": (0, 0, 0, 13),
         "chip_border": (34, 34, 34, 255),
         "stat_bg": (0, 0, 0, 13),
@@ -1281,8 +1281,8 @@ def _render_p3(
     max_value_w  = (table_x1 - 16) - col_value_x   # right edge minus 16px inset
 
     is_dark = (theme or "").lower() in _P3_DARK_THEMES
-    label_fill  = (255, 255, 255, 160) if is_dark else (60, 60, 60, 180)
-    header_fill = (255, 255, 255, 110) if is_dark else (80, 80, 80, 140)
+    label_fill  = (255, 255, 255, 160) if is_dark else (30, 30, 30, 230)
+    header_fill = (255, 255, 255, 110) if is_dark else (40, 40, 40, 200)
 
     # ── "TECH SPECS" header row ────────────────────────────────────────
     header_text_y = table_y + P3_SPEC_PAD_Y + (P3_SPEC_HEADER_H - 18) // 2
@@ -1491,6 +1491,18 @@ def _render_p4(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
+    # ── Left-side scrim: semi-transparent gradient so text is readable over hero ──
+    _scrim_w = int(W * 0.50)
+    _scrim = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    _scrim_draw = ImageDraw.Draw(_scrim)
+    _grad_start = _tc.get("p1_grad_start", (13, 92, 92))
+    for x in range(_scrim_w):
+        frac = 1 - (x / _scrim_w)
+        a = int(200 * frac * frac)
+        _scrim_draw.line([(x, 0), (x, H)], fill=(_grad_start[0], _grad_start[1], _grad_start[2], a))
+    canvas.alpha_composite(_scrim)
+    draw = ImageDraw.Draw(canvas)
+
     # ── Brand + model header ──────────────────────────────────────────
     model_y = top_pad + brand_h - 4
     draw_text_align_left(draw, pad, top_pad,   brand_text, brand_font, text_color)
@@ -1671,12 +1683,12 @@ def _render_p5(
             bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
         canvas.alpha_composite(bot_grad)
 
-        # Top gradient
+        # Top gradient (stronger for text readability)
         top_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         tg_draw  = ImageDraw.Draw(top_grad)
         top_h    = int(H * P5_GRAD_TOP_H)
         for y in range(top_h):
-            a = int(100 * (1 - y / top_h) ** 1.8)
+            a = int(180 * (1 - y / top_h) ** 1.6)
             tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
         canvas.alpha_composite(top_grad)
         draw = ImageDraw.Draw(canvas)
