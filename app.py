@@ -21,7 +21,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-02a"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-03a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -37,24 +37,84 @@ THEME_COLORS = {
         "chip_text": (30, 30, 30, 255),
         "divider": (80, 80, 80, 180),
         "sticker_outline": (20, 20, 20, 255),
+        "accent": (34, 34, 34, 255),
+        "brand_color": (0, 0, 0, 90),
+        "chip_bg": (0, 0, 0, 13),
+        "chip_border": (34, 34, 34, 255),
+        "stat_bg": (0, 0, 0, 13),
+        "stat_val": (34, 34, 34, 255),
+        "stat_lbl": (0, 0, 0, 77),
+        "cta_bg": (26, 26, 26, 255),
+        "cta_text": (245, 204, 74, 255),
+        "watermark": (0, 0, 0, 8),
+        "top_accent": (34, 34, 34, 255),
+        "stripe_fill": (0, 0, 0, 13),
+        "stripe_line": (0, 0, 0, 26),
+        "badge_border": (34, 34, 34, 255),
+        "badge_text": (34, 34, 34, 255),
     },
     "grey": {
         "text": (20, 20, 20, 255),
         "chip_text": (30, 30, 30, 255),
         "divider": (80, 80, 80, 180),
         "sticker_outline": (20, 20, 20, 255),
+        "accent": (245, 204, 74, 255),
+        "brand_color": (255, 255, 255, 90),
+        "chip_bg": (255, 255, 255, 13),
+        "chip_border": (245, 204, 74, 255),
+        "stat_bg": (255, 255, 255, 13),
+        "stat_val": (245, 204, 74, 255),
+        "stat_lbl": (255, 255, 255, 77),
+        "cta_bg": (245, 204, 74, 255),
+        "cta_text": (17, 17, 17, 255),
+        "watermark": (255, 255, 255, 5),
+        "top_accent": (245, 204, 74, 255),
+        "stripe_fill": (245, 204, 74, 15),
+        "stripe_line": (245, 204, 74, 38),
+        "badge_border": (245, 204, 74, 255),
+        "badge_text": (245, 204, 74, 255),
     },
     "navy": {
         "text": (255, 255, 255, 255),
         "chip_text": (240, 240, 240, 255),
         "divider": (200, 200, 200, 180),
         "sticker_outline": (20, 20, 20, 255),
+        "accent": (245, 204, 74, 255),
+        "brand_color": (255, 255, 255, 115),
+        "chip_bg": (255, 255, 255, 13),
+        "chip_border": (245, 204, 74, 255),
+        "stat_bg": (255, 255, 255, 13),
+        "stat_val": (245, 204, 74, 255),
+        "stat_lbl": (255, 255, 255, 97),
+        "cta_bg": (245, 204, 74, 255),
+        "cta_text": (17, 17, 17, 255),
+        "watermark": (255, 255, 255, 6),
+        "top_accent": (245, 204, 74, 255),
+        "stripe_fill": (245, 204, 74, 15),
+        "stripe_line": (245, 204, 74, 38),
+        "badge_border": (245, 204, 74, 255),
+        "badge_text": (245, 204, 74, 255),
     },
     "teal": {
         "text": (255, 255, 255, 255),
         "chip_text": (240, 240, 240, 255),
         "divider": (200, 200, 200, 180),
         "sticker_outline": (20, 20, 20, 255),
+        "accent": (245, 204, 74, 255),
+        "brand_color": (255, 255, 255, 128),
+        "chip_bg": (255, 255, 255, 15),
+        "chip_border": (245, 204, 74, 255),
+        "stat_bg": (255, 255, 255, 18),
+        "stat_val": (245, 204, 74, 255),
+        "stat_lbl": (255, 255, 255, 102),
+        "cta_bg": (245, 204, 74, 255),
+        "cta_text": (17, 17, 17, 255),
+        "watermark": (255, 255, 255, 8),
+        "top_accent": (245, 204, 74, 255),
+        "stripe_fill": (245, 204, 74, 18),
+        "stripe_line": (245, 204, 74, 46),
+        "badge_border": (245, 204, 74, 255),
+        "badge_text": (245, 204, 74, 255),
     },
 }
 
@@ -485,6 +545,95 @@ def load_bg(theme: str):
 #         chips + CTA bottom-centre — all on the theme background.
 # =====================================================================
 
+def _draw_diagonal_stripe(canvas: Image.Image, W: int, H: int, tc: dict):
+    """Draw a subtle diagonal accent stripe + thin line (top-right to bottom)."""
+    import math
+    stripe = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(stripe)
+    sf = tc.get("stripe_fill", (245, 204, 74, 18))
+    sl = tc.get("stripe_line", (245, 204, 74, 46))
+    # Rotated stripe: draw a wide band at angle
+    cx, cy = W - 80, H // 2
+    band_w = 160
+    angle = 12
+    rad = math.radians(angle)
+    cos_a, sin_a = math.cos(rad), math.sin(rad)
+    for y_off in range(-H, H):
+        x = cx + int(y_off * sin_a)
+        y = cy + int(y_off * cos_a)
+        if 0 <= y < H:
+            alpha = int(sf[3] * max(0, 1 - abs(y_off) / (H * 0.8)))
+            if alpha > 0:
+                sd.line([(x - band_w // 2, y), (x + band_w // 2, y)],
+                        fill=(sf[0], sf[1], sf[2], alpha))
+    # Thin accent line
+    for y_off in range(-H, H):
+        x = cx + 50 + int(y_off * sin_a)
+        y = cy + int(y_off * cos_a)
+        if 0 <= y < H and 0 <= x < W:
+            stripe.putpixel((x, y), sl)
+    canvas.alpha_composite(stripe)
+
+
+def _draw_outlined_badge(draw: ImageDraw.ImageDraw, text: str, x1: int, y0: int,
+                         font, border_color, text_color):
+    """Draw an outlined rounded pill badge (no fill) anchored at top-right."""
+    px, py = 18, 8
+    tw, th = text_size(draw, text, font)
+    bw, bh = tw + px * 2, th + py * 2
+    bx0 = x1 - bw
+    by1 = y0 + bh
+    draw.rounded_rectangle((bx0, y0, x1, by1), radius=bh // 2,
+                           outline=border_color, width=2)
+    draw_text_centered_in_box(draw, bx0, y0, bw, bh, text, font, text_color)
+
+
+def _draw_stats_bar(canvas: Image.Image, y_top: int, W: int,
+                    bearings: str, gear_ratio: str, max_drag: str, tc: dict):
+    """Draw a 3-column stats bar (Bearings / Gear Ratio / Max Drag)."""
+    draw = ImageDraw.Draw(canvas)
+    pad_x = 14
+    gap = 4
+    bar_w = W - pad_x * 2
+    pill_w = (bar_w - gap * 2) // 3
+    pill_h = 44
+    radius = 5
+
+    stat_bg = tc.get("stat_bg", (255, 255, 255, 18))
+    stat_val_color = tc.get("stat_val", (245, 204, 74, 255))
+    stat_lbl_color = tc.get("stat_lbl", (255, 255, 255, 102))
+
+    val_font = load_font_bold(24)
+    lbl_font = load_font_bold(10)
+
+    stats = [
+        (bearings or "\u2014", "BEARINGS"),
+        (gear_ratio or "\u2014", "GEAR RATIO"),
+        (max_drag or "\u2014", "MAX DRAG"),
+    ]
+
+    overlay = Image.new("RGBA", (W, canvas.size[1]), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+
+    for i, (val, lbl) in enumerate(stats):
+        px0 = pad_x + i * (pill_w + gap)
+        od.rounded_rectangle((px0, y_top, px0 + pill_w, y_top + pill_h),
+                             radius=radius, fill=stat_bg)
+        # Value (centered, upper portion)
+        vw, vh = text_size(od, val, val_font)
+        vx = px0 + (pill_w - vw) // 2
+        vy = y_top + 6
+        od.text((vx, vy), val, font=val_font, fill=stat_val_color)
+        # Label (centered, below value)
+        lw, lh = text_size(od, lbl, lbl_font)
+        lx = px0 + (pill_w - lw) // 2
+        ly = y_top + pill_h - lh - 6
+        od.text((lx, ly), lbl, font=lbl_font, fill=stat_lbl_color)
+
+    canvas.alpha_composite(overlay)
+    return pill_h
+
+
 def _render_product(
     hero: Image.Image,
     theme: str,
@@ -495,147 +644,208 @@ def _render_product(
     chip3: str,
     chip4: str = "",
     chip5: str = "",
+    bearings: str = "",
+    gear_ratio: str = "",
+    max_drag: str = "",
 ) -> bytes:
-    """Compose a 1000×1000 product card and return raw PNG bytes."""
+    """Compose a 1000x1000 P1 product card.
+
+    Two visual modes auto-selected:
+      P1-A (Hybrid Mix)  — when no stats data. Budget reels.
+      P1-B (Pro Series)  — when bearings/gear_ratio/max_drag provided.
+                           Adds ghost watermark + stats bar.
+    """
     W, H = 1000, 1000
     canvas = load_bg(theme).resize((W, H), Image.LANCZOS)
     draw = ImageDraw.Draw(canvas)
 
     tc = get_theme_colors(theme)
-    text_color      = tc["text"]
-    chip_text_color = tc["chip_text"]
-    divider_color   = tc["divider"]
+    text_color = tc["text"]
+    accent     = tc.get("accent", (245, 204, 74, 255))
 
-    pad          = 56
-    top_pad      = 44
-    BOTTOM_SAFE  = 28
-    CHIP_TOP_GAP = 16
-    CTA_GAP_Y    = 20
-    header_left  = pad
-    header_top   = top_pad
-    header_max_w = int(W * 0.65) - header_left
+    has_stats = any(s.strip() for s in [bearings, gear_ratio, max_drag])
+    pad      = 56
+    top_pad  = 44
+    CTA_H    = 42
+    STATS_H  = 48 if has_stats else 0
+    STATS_GAP = 6 if has_stats else 0
+
+    # ── 1. Gold top accent line ──────────────────────────────────────
+    top_accent_color = tc.get("top_accent", accent)
+    accent_overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ad = ImageDraw.Draw(accent_overlay)
+    # Gradient: transparent edges → solid center
+    for x in range(W):
+        t = 1.0
+        if x < W * 0.05:
+            t = x / (W * 0.05)
+        elif x > W * 0.95:
+            t = (W - x) / (W * 0.05)
+        a = int(top_accent_color[3] * t)
+        if a > 0:
+            ad.line([(x, 0), (x, 2)], fill=(top_accent_color[0], top_accent_color[1],
+                                             top_accent_color[2], a))
+    canvas.alpha_composite(accent_overlay)
+    draw = ImageDraw.Draw(canvas)
+
+    # ── 2. Diagonal stripe ───────────────────────────────────────────
+    _draw_diagonal_stripe(canvas, W, H, tc)
+    draw = ImageDraw.Draw(canvas)
+
+    # ── 3. Ghost watermark (P1-B only) ───────────────────────────────
+    if has_stats:
+        wm_color = tc.get("watermark", (255, 255, 255, 8))
+        wm_font = load_font_bold(180)
+        wm_text = (model or "").strip().upper()
+        if wm_text:
+            wm_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            wm_draw = ImageDraw.Draw(wm_layer)
+            ww, wh = text_size(wm_draw, wm_text, wm_font)
+            wm_draw.text((W - ww + 10, H - CTA_H - STATS_H - wh - 20),
+                         wm_text, font=wm_font, fill=wm_color)
+            canvas.alpha_composite(wm_layer)
+            draw = ImageDraw.Draw(canvas)
+
+    # ── 4. Brand text ────────────────────────────────────────────────
+    header_left = pad
+    header_top  = top_pad
+    header_max_w = int(W * 0.60) - header_left
 
     brand_text = (brand or "").strip().upper()
+    brand_color = tc.get("brand_color", (255, 255, 255, 128))
     brand_font, brand_text = fit_text(draw, brand_text, max_w=header_max_w,
-                                      start_size=56, min_size=34, loader=load_font_regular)
+                                      start_size=40, min_size=24, loader=load_font_regular)
     brand_h = text_size(draw, brand_text, brand_font)[1]
+    draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, brand_color)
 
+    # ── 5. Gold accent line under brand ──────────────────────────────
+    accent_y = header_top + brand_h + 2
+    draw.rectangle([(header_left, accent_y), (header_left + 30, accent_y + 2)],
+                   fill=accent)
+
+    # ── 6. Model text ────────────────────────────────────────────────
     model_text = (model or "").strip().upper()
+    model_y = accent_y + 6
     model_font, model_text = fit_text(draw, model_text, max_w=header_max_w,
-                                      start_size=200, min_size=72, loader=load_font_bold)
-    model_y = header_top + brand_h - 6
-
-    features = [(chip1 or "").strip(), (chip2 or "").strip(),
-                 (chip4 or "").strip(), (chip5 or "").strip()]
-    features = [c for c in features if c]
-
-    chip_font  = load_font_bold(36)
-    cta_text   = "READY STOCK \u2022 FAST SHIP"
-    cta_font   = load_font_bold(18)
-    cta_pad_x  = 14
-    cta_pad_y  = 6
-    cta_tw, cta_th = text_size(draw, cta_text, cta_font)
-    cta_w = cta_tw + cta_pad_x * 2
-    cta_h = cta_th + cta_pad_y * 2
-
-    chip_groups = []
-    for i, c in enumerate(features):
-        tw, th     = text_size(draw, c, chip_font)
-        icon_file  = CHIP_ICONS.get(i)
-        icon       = load_icon(icon_file, ICON_SIZE) if icon_file else None
-        icon_w     = ICON_SIZE if icon else 0
-        group_w    = (icon_w + ICON_TEXT_GAP + tw) if icon else tw
-        group_h    = max(ICON_SIZE, th)
-        chip_groups.append((c, tw, th, group_w, group_h, icon, icon_w))
-
-    chip_row_h     = max((gh for _, _, _, _, gh, _, _ in chip_groups), default=0)
-    num_dividers   = max(0, len(chip_groups) - 1)
-    total_chips_w  = sum(gw for _, _, _, gw, _, _, _ in chip_groups)
-    total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
-    # --- Compute model text bottom for chip placement ---
+                                      start_size=160, min_size=60, loader=load_font_bold)
     model_h = text_size(draw, model_text, model_font)[1]
-    model_bottom = model_y + model_h
+    draw_text_align_left(draw, header_left, model_y, model_text, model_font, text_color)
 
-    # --- needed_below: only CTA (chips moved above hero) ---
-    needed_below = CTA_GAP_Y + cta_h + BOTTOM_SAFE
-
-    # --- Draw header text ---
-    draw_text_align_left(draw, header_left, header_top, brand_text, brand_font, text_color)
-    draw_text_align_left(draw, header_left, model_y,    model_text, model_font, text_color)
-
-    # --- Draw badge (chip3 / size) at top-right ---
+    # ── 7. Outlined badge (top-right) ────────────────────────────────
     size_text = (chip3 or "").strip()
     if size_text:
-        badge_font = load_font_bold(38)
-        bpx, bpy   = 22, 12
-        tw, th     = text_size(draw, size_text, badge_font)
-        bw, bh     = tw + bpx * 2, th + bpy * 2
-        bx1        = W - pad
-        by0        = top_pad + 12
-        bx0        = bx1 - bw
-        by1        = by0 + bh
-        draw_sticker_pill(draw, bx0, by0, bx1, by1, size_text, badge_font)
+        badge_font = load_font_bold(24)
+        badge_border = tc.get("badge_border", accent)
+        badge_text_c = tc.get("badge_text", accent)
+        _draw_outlined_badge(draw, size_text, W - pad, top_pad + 8,
+                             badge_font, badge_border, badge_text_c)
 
-    # --- Measure chip text width to auto-separate from hero ---
-    max_chip_tw = max((tw for _, tw, _, _, _, _, _ in chip_groups), default=0)
-    CHIP_HERO_GAP = 40           # minimum px gap between widest chip and hero left edge
-    chip_right_edge = header_left + max_chip_tw + CHIP_HERO_GAP
+    # ── 8. Feature chips (left-border style) ─────────────────────────
+    features = [(chip1 or "").strip(), (chip2 or "").strip(),
+                (chip4 or "").strip(), (chip5 or "").strip()]
+    features = [c for c in features if c]
 
-    # --- Hero sizing: fit into the right zone (between chip_right_edge and canvas edge) ---
+    chip_font = load_font_bold(22)
+    chip_bg = tc.get("chip_bg", (255, 255, 255, 15))
+    chip_border_color = tc.get("chip_border", accent)
+    chip_text_color = tc.get("chip_text", (240, 240, 240, 255))
+
+    # Measure chips to compute hero positioning
+    chip_widths = []
+    for c in features:
+        tw, _ = text_size(draw, c, chip_font)
+        chip_widths.append(tw)
+    max_chip_w = max(chip_widths, default=0)
+
+    CHIP_HERO_GAP = 40
+    chip_right_edge = header_left + max_chip_w + 26 + CHIP_HERO_GAP if features else header_left + int(W * 0.10)
+
+    # ── 9. Hero sizing and placement ─────────────────────────────────
     hero_w, hero_h = hero.size
-    right_zone_w   = W - chip_right_edge - 20   # available width for hero
-    TARGET_H_RATIO = 0.68
-    target_h       = int(H * TARGET_H_RATIO)
-    scale_h        = target_h / hero_h
-    scale_w        = right_zone_w / hero_w
-    scale          = min(scale_h, scale_w)       # fit whichever is tighter
-    new_w          = max(1, int(hero_w * scale))
-    new_h          = max(1, int(hero_h * scale))
-    hero_rs        = hero.resize((new_w, new_h), resample=Image.LANCZOS)
+    right_zone_w = W - chip_right_edge - 20
+    bottom_reserved = CTA_H + STATS_H + STATS_GAP
+    TARGET_H_RATIO = 0.62 if has_stats else 0.68
+    target_h = int(H * TARGET_H_RATIO)
+    scale_h = target_h / hero_h
+    scale_w = right_zone_w / hero_w
+    scale = min(scale_h, scale_w)
+    new_w = max(1, int(hero_w * scale))
+    new_h = max(1, int(hero_h * scale))
+    hero_rs = hero.resize((new_w, new_h), resample=Image.LANCZOS)
 
-    # Position hero slightly left of right-zone centre (30% into the zone)
     right_zone_left_bias = chip_right_edge + int(right_zone_w * 0.30)
-    px             = right_zone_left_bias - new_w // 2
-    px             = max(px, chip_right_edge)
-    px             = min(px, W - new_w - 10)
-    py             = int(H * 0.22)
-    max_hero_bottom = H - needed_below
+    px = right_zone_left_bias - new_w // 2
+    px = max(px, chip_right_edge)
+    px = min(px, W - new_w - 10)
+    py = int(H * 0.18)
+    max_hero_bottom = H - bottom_reserved - 10
     if py + new_h > max_hero_bottom:
         py = max_hero_bottom - new_h
     hero_bottom = py + new_h
 
-    # --- Glow + Hero composite ---
-    glow_cx = px + new_w // 2
-    glow_cy = py + new_h // 2
-    draw_radial_glow(canvas, glow_cx, glow_cy)
+    # Glow + Hero composite
+    draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2)
     draw = ImageDraw.Draw(canvas)
-
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # --- Draw chips LEFT-aligned, upper-third of reel area ---
-    CHIP_LINE_GAP  = 6           # space between stacked chip lines
-    total_chip_h = sum(gh for _, _, _, _, gh, _, _ in chip_groups) + CHIP_LINE_GAP * max(0, len(chip_groups) - 1)
-    # Align chips at ~40% of reel height (upper body area)
-    chip_anchor_y = py + int(new_h * 0.40)
-    chip_cur_y = chip_anchor_y - total_chip_h // 2
+    # ── 10. Draw feature chips ───────────────────────────────────────
+    if features:
+        chip_start_y = model_y + model_h + 20
+        CHIP_LINE_GAP = 6
+        chip_h = 28
 
-    for idx, (c, tw, th, gw, gh, icon, icon_w) in enumerate(chip_groups):
-        line_center_y = chip_cur_y + gh // 2
-        text_x = header_left
-        bbox   = draw.textbbox((0, 0), c, font=chip_font)
-        text_h = bbox[3] - bbox[1]
-        text_y = line_center_y - text_h // 2 - bbox[1]
-        draw.text((text_x, text_y), c, font=chip_font, fill=chip_text_color)
-        chip_cur_y += gh + CHIP_LINE_GAP
+        for c in features:
+            tw, th = text_size(draw, c, chip_font)
+            cw = tw + 22  # padding inside chip
+            # Chip background
+            chip_overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            cd = ImageDraw.Draw(chip_overlay)
+            cd.rounded_rectangle(
+                (header_left, chip_start_y, header_left + cw, chip_start_y + chip_h),
+                radius=4, fill=chip_bg)
+            canvas.alpha_composite(chip_overlay)
+            draw = ImageDraw.Draw(canvas)
+            # Left border accent
+            draw.rectangle(
+                [(header_left, chip_start_y + 2),
+                 (header_left + 3, chip_start_y + chip_h - 2)],
+                fill=chip_border_color)
+            # Chip text
+            text_y = chip_start_y + (chip_h - th) // 2
+            draw.text((header_left + 12, text_y), c, font=chip_font, fill=chip_text_color)
+            chip_start_y += chip_h + CHIP_LINE_GAP
 
-    # --- CTA pill below hero ---
-    cta_x0 = (W - cta_w) // 2
-    cta_y0 = hero_bottom + CTA_GAP_Y
-    cta_y0 = min(cta_y0, H - BOTTOM_SAFE - cta_h)
-    cta_x1 = cta_x0 + cta_w
-    cta_y1 = cta_y0 + cta_h
-    draw_sticker_pill(draw, cta_x0, cta_y0, cta_x1, cta_y1, cta_text, cta_font)
+    # ── 11. Bottom gradient fade ─────────────────────────────────────
+    fade = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    fd = ImageDraw.Draw(fade)
+    fade_h = 30
+    fade_top = H - CTA_H - STATS_H - STATS_GAP - fade_h
+    for y in range(fade_h):
+        a = int(25 * (y / fade_h))
+        fd.line([(0, fade_top + y), (W, fade_top + y)], fill=(0, 0, 0, a))
+    canvas.alpha_composite(fade)
+    draw = ImageDraw.Draw(canvas)
+
+    # ── 12. Stats bar (P1-B only) ────────────────────────────────────
+    if has_stats:
+        stats_y = H - CTA_H - STATS_H - 2
+        _draw_stats_bar(canvas, stats_y, W, bearings, gear_ratio, max_drag, tc)
+        draw = ImageDraw.Draw(canvas)
+
+    # ── 13. Full-width CTA bar ───────────────────────────────────────
+    cta_bg = tc.get("cta_bg", (245, 204, 74, 255))
+    cta_text_color = tc.get("cta_text", (17, 17, 17, 255))
+    draw.rectangle([(0, H - CTA_H), (W, H)], fill=cta_bg)
+    cta_font = load_font_bold(20)
+    cta_left = "READY STOCK"
+    cta_right = "FAST SHIP"
+    cta_sep = "\u25C6"
+    cta_full = f"{cta_left}  {cta_sep}  {cta_right}"
+    cw, ch = text_size(draw, cta_full, cta_font)
+    cx = (W - cw) // 2
+    cy = H - CTA_H + (CTA_H - ch) // 2
+    draw.text((cx, cy), cta_full, font=cta_font, fill=cta_text_color)
 
     out = BytesIO()
     canvas.convert("RGBA").save(out, format="PNG")
@@ -663,8 +873,15 @@ def render_p1(
     chip4: str = Query(""),
     chip5: str = Query(""),
     theme: str = Query("yellow"),
+    bearings:   str = Query(""),
+    gear_ratio: str = Query(""),
+    max_drag:   str = Query(""),
 ):
-    png = _render_product(_load_hero(key), theme, brand, model, chip1, chip2, chip3, chip4, chip5)
+    png = _render_product(
+        _load_hero(key), theme, brand, model,
+        chip1, chip2, chip3, chip4, chip5,
+        bearings=bearings, gear_ratio=gear_ratio, max_drag=max_drag,
+    )
     return Response(content=png, media_type="image/png")
 
 
