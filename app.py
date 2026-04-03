@@ -33,7 +33,7 @@ STICKER_TEXT = (20, 20, 20, 255)
 # ======================== THEME COLOR MAPPING ============================
 THEME_COLORS = {
     "yellow": {
-        "text": (20, 20, 20, 255),
+        "text": (26, 26, 26, 255),
         "chip_text": (30, 30, 30, 255),
         "divider": (80, 80, 80, 180),
         "sticker_outline": (20, 20, 20, 255),
@@ -43,19 +43,19 @@ THEME_COLORS = {
         "chip_border": (34, 34, 34, 255),
         "stat_bg": (0, 0, 0, 13),
         "stat_val": (34, 34, 34, 255),
-        "stat_lbl": (0, 0, 0, 150),
+        "stat_lbl": (0, 0, 0, 160),
         "cta_bg": (26, 26, 26, 255),
         "cta_text": (245, 204, 74, 255),
-        "watermark": (0, 0, 0, 8),
+        "watermark": (0, 0, 0, 3),       # barely visible — yellow bg shows shadows easily
         "top_accent": (34, 34, 34, 255),
-        "stripe_fill": (0, 0, 0, 13),
-        "stripe_line": (0, 0, 0, 26),
+        "stripe_fill": (0, 0, 0, 5),     # very subtle stripe on yellow
+        "stripe_line": (0, 0, 0, 10),    # very subtle line on yellow
         "badge_border": (34, 34, 34, 255),
         "badge_text": (34, 34, 34, 255),
-        # P1 gradient bg: brighter gold matching mockup
-        "p1_grad_start": (230, 196, 0),
-        "p1_grad_end": (204, 170, 0),
-        "p1_glow": (0, 0, 0, 8),
+        # P1 gradient bg: bright vibrant gold
+        "p1_grad_start": (240, 205, 10),
+        "p1_grad_end": (218, 186, 0),
+        "p1_glow": (0, 0, 0, 5),
     },
     "grey": {
         "text": (255, 255, 255, 255),
