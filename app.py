@@ -1092,7 +1092,7 @@ P3_SPEC_LABELS     = ["Gear Ratio", "Max Drag", "Weight"]   # 3 rows; Line Cap. 
 # Subtle table background: dark themes get white tint, light themes get dark tint
 _P3_SPEC_BG_DARK  = (255, 255, 255, 28)   # white overlay on teal/navy  — slightly more visible
 _P3_SPEC_BG_LIGHT = (0,   0,   0,   20)   # black overlay on yellow/grey
-_P3_DARK_THEMES   = {"teal", "navy"}
+_P3_DARK_THEMES   = {"teal", "navy", "grey"}
 
 
 def _render_p3(
