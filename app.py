@@ -1586,7 +1586,7 @@ def render_p4(
 # =====================================================================
 
 P5_GRAD_BOTTOM_H = 0.45   # bottom gradient covers this fraction of canvas
-P5_GRAD_TOP_H    = 0.22   # top gradient covers this fraction of canvas
+P5_GRAD_TOP_H    = 0.30   # top gradient covers this fraction of canvas
 P5_CHIP_BOTTOM   = 52     # px from bottom edge to chip row baseline
 P5_CHIP_SIZE     = 38     # chip font size
 
@@ -1687,12 +1687,12 @@ def _render_p5(
             bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
         canvas.alpha_composite(bot_grad)
 
-        # Top gradient (stronger for text readability)
+        # Top gradient (stronger for text readability over dark photos)
         top_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         tg_draw  = ImageDraw.Draw(top_grad)
         top_h    = int(H * P5_GRAD_TOP_H)
         for y in range(top_h):
-            a = int(180 * (1 - y / top_h) ** 1.6)
+            a = int(220 * (1 - y / top_h) ** 1.4)
             tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
         canvas.alpha_composite(top_grad)
         draw = ImageDraw.Draw(canvas)
