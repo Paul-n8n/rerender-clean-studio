@@ -741,17 +741,25 @@ def _render_product(
     draw = ImageDraw.Draw(canvas)
 
     # ── 3. Ghost watermark (P1-B only) ───────────────────────────────
-    # mockup: font-size 170px → 425px, bottom 55px → 138px from bottom
+    # Auto-fit watermark text to canvas width (max 90% of W)
     if has_stats:
         wm_color = tc.get("watermark", (255, 255, 255, 8))
-        wm_font = load_font_bold(425)
         wm_text = (model or "").strip().upper()
         if wm_text:
             wm_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
             wm_draw = ImageDraw.Draw(wm_layer)
+            # Start at 425px and shrink until text fits within 90% of canvas width
+            wm_max_w = int(W * 0.90)
+            wm_sz = 425
+            wm_font = load_font_bold(wm_sz)
             ww, wh = text_size(wm_draw, wm_text, wm_font)
-            wm_draw.text((W - ww + 25, H - CTA_H - STATS_H - wh + 20),
-                         wm_text, font=wm_font, fill=wm_color)
+            while ww > wm_max_w and wm_sz > 100:
+                wm_sz -= 20
+                wm_font = load_font_bold(wm_sz)
+                ww, wh = text_size(wm_draw, wm_text, wm_font)
+            wm_x = (W - ww) // 2  # centre horizontally
+            wm_y = H - CTA_H - STATS_H - wh + 20
+            wm_draw.text((wm_x, wm_y), wm_text, font=wm_font, fill=wm_color)
             canvas.alpha_composite(wm_layer)
             draw = ImageDraw.Draw(canvas)
 
