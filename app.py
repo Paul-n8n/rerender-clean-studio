@@ -1059,18 +1059,37 @@ def _extract_p3_specs_from_paste(raw: str) -> dict:
         return result
 
     # Strategy 2: Try to parse from _parse_specs_paste (reuse P6 parser)
+    # Extract min-max RANGES across all models, not just first model
     try:
         specs_data = _parse_specs_paste(raw)
         if specs_data:
-            first = specs_data[0]
-            if first.get("ratio"):
-                result["gear_ratio"] = first["ratio"]
-            if first.get("drag"):
-                result["max_drag"] = first["drag"]
-            if first.get("wt"):
-                result["weight"] = first["wt"]
-            if first.get("bb"):
-                result["bearings"] = first["bb"]
+            # Collect all numeric values per field
+            ratios, drags, weights, bbs = [], [], [], []
+            for row in specs_data:
+                if row.get("ratio"):
+                    m = re.search(r"(\d+\.?\d*)", row["ratio"])
+                    if m: ratios.append(float(m.group(1)))
+                if row.get("drag"):
+                    m = re.search(r"(\d+\.?\d*)", row["drag"])
+                    if m: drags.append(float(m.group(1)))
+                if row.get("wt"):
+                    m = re.search(r"(\d+\.?\d*)", row["wt"])
+                    if m: weights.append(float(m.group(1)))
+                if row.get("bb"):
+                    bbs.append(row["bb"])
+
+            # Build range strings
+            if ratios:
+                mn, mx = min(ratios), max(ratios)
+                result["gear_ratio"] = f"{mn}:1" if mn == mx else f"{mn}:1-{mx}:1"
+            if drags:
+                mn, mx = min(drags), max(drags)
+                result["max_drag"] = f"{int(mn)} kg" if mn == mx else f"{int(mn)}-{int(mx)} kg"
+            if weights:
+                mn, mx = min(weights), max(weights)
+                result["weight"] = f"{int(mn)}g" if mn == mx else f"{int(mn)}-{int(mx)}g"
+            if bbs:
+                result["bearings"] = bbs[0]  # BB is same across models
     except Exception:
         pass
 
