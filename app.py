@@ -1685,7 +1685,7 @@ def _render_p5(
         # ── Composite mode (fallback cutout on themed background) ──────
         # Use themed bg so cutout edge anti-aliasing blends correctly
         _tc = get_theme_colors(theme)
-    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
+        canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
         draw   = ImageDraw.Draw(canvas)
         tc         = get_theme_colors(theme)
         text_color = tc["text"]
