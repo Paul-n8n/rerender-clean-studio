@@ -2988,43 +2988,38 @@ def prep_post_image(
     # 8. Paste product ON TOP of the big text (3D layering effect)
     bg.paste(cutout_resized, (x, y), cutout_resized)
 
-    # 9. Brand name at top — clean, medium size
+    # 9. Brand name at top — large, bold
     if brand:
         top_draw = ImageDraw.Draw(bg)
         brand_text = brand.upper()
-        brand_font = load_font_bold(36)
+        brand_font, brand_text = fit_text(top_draw, brand_text, int(width * 0.80), start_size=72, min_size=48, loader=load_font_bold)
         bw, bh = text_size(top_draw, brand_text, brand_font)
         bx = (width - bw) // 2
-        by = int(height * 0.03)
-        # Letter-spaced brand with subtle glow
+        by = int(height * 0.02)
         draw_text_with_shadow(top_draw, bx, by, brand_text, brand_font,
-                              fill=(255, 255, 255, 200),
-                              shadow_color=(*bright_accent, 80), shadow_offset=2)
+                              fill=(255, 255, 255, 230),
+                              shadow_color=(*bright_accent, 100), shadow_offset=3)
 
-    # 10. Model name at bottom — bold, prominent
+    # 10. Model name at bottom — very large, prominent
     if model:
         bot_draw = ImageDraw.Draw(bg)
         model_display = model.upper()
-        model_font = load_font_bold(52)
+        model_font, model_display = fit_text(bot_draw, model_display, int(width * 0.90), start_size=100, min_size=56, loader=load_font_bold)
         mw, mh = text_size(bot_draw, model_display, model_font)
-        # Fit if too wide
-        if mw > width * 0.85:
-            model_font, model_display = fit_text(bot_draw, model_display, int(width * 0.85), start_size=52, min_size=32, loader=load_font_bold)
-            mw, mh = text_size(bot_draw, model_display, model_font)
         mx = (width - mw) // 2
-        my = int(height * 0.90) - mh // 2
+        my = int(height * 0.88) - mh // 2
         draw_text_with_shadow(bot_draw, mx, my, model_display, model_font,
                               fill=(255, 255, 255, 255),
-                              shadow_color=(0, 0, 0, 160), shadow_offset=3)
+                              shadow_color=(0, 0, 0, 180), shadow_offset=4)
 
     # 11. Thin accent line separator above bottom text
     if model:
-        line_y = my - 12
+        line_y = my - 14
         line_draw = ImageDraw.Draw(bg)
-        line_w = int(width * 0.3)
+        line_w = int(width * 0.35)
         line_x = (width - line_w) // 2
         line_draw.line([(line_x, line_y), (line_x + line_w, line_y)],
-                       fill=(*bright_accent, 180), width=2)
+                       fill=(*bright_accent, 200), width=3)
 
     # 12. Vignette — heavier for dramatic poster look
     vignette = Image.new("RGBA", (width, height), (0, 0, 0, 0))
