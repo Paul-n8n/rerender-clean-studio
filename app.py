@@ -2924,83 +2924,125 @@ def prep_post_image(
     cutout = Image.open(BytesIO(data)).convert("RGBA")
     cutout = trim_transparent(cutout, pad=0)
 
-    # 2. Build background — brighter gradient for post (not P1 dark gradient)
+    # ═══ BOLD POSTER STYLE — text behind product, dark moody bg ═══
+    import random
     _tc = get_theme_colors(theme)
-    # Use lighter gradient: blend P1 start color with white for brighter tone
+
+    # 2. Build dark moody gradient background
     gs = _tc.get("p1_grad_start", (13, 92, 92))
     ge = _tc.get("p1_grad_end", (7, 56, 56))
-    # Brighten by 60% towards white
-    bright_start = tuple(min(255, int(c + (255 - c) * 0.3)) for c in gs)
-    bright_end = tuple(min(255, int(c + (255 - c) * 0.1)) for c in ge)
-    bg = _make_gradient_bg_fast(width, height, bright_start, bright_end)
+    # Darken to 30% brightness for dramatic look
+    dark_start = tuple(max(0, int(c * 0.3)) for c in gs)
+    dark_end = tuple(max(0, int(c * 0.15)) for c in ge)
+    bg = _make_gradient_bg_fast(width, height, dark_start, dark_end).convert("RGBA")
 
-    # 3. Scale cutout to fit: 70% of height (make room for text at bottom)
-    max_h = int(height * 0.70)
-    max_w = int(width * 0.85)
+    # 3. Add subtle grain/noise texture
+    import numpy as np
+    noise = np.random.randint(0, 25, (height, width), dtype=np.uint8)
+    noise_img = Image.fromarray(noise, mode='L').convert("RGBA")
+    noise_rgba = Image.new("RGBA", (width, height), (255, 255, 255, 0))
+    noise_rgba.putalpha(Image.fromarray(noise, mode='L'))
+    bg = Image.alpha_composite(bg, noise_rgba)
+
+    # 4. Draw LARGE model text BEHIND product (the key visual trick)
+    text_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    text_draw = ImageDraw.Draw(text_layer)
+
+    model_text = (model or "REEL").upper()
+    # Giant text — fit to ~90% of canvas width
+    big_font = fit_text(text_draw, model_text, int(width * 0.90), start_size=200, min_size=80, loader=load_font_bold)
+    tw, th = text_size(text_draw, model_text, big_font)
+    # Centre vertically at 40% of canvas (slightly above centre)
+    tx = (width - tw) // 2
+    ty = int(height * 0.40) - th // 2
+
+    # Theme-tinted text with low opacity (behind product)
+    accent = _tc.get("p1_grad_start", (13, 92, 92))
+    bright_accent = tuple(min(255, int(c * 2.5)) for c in accent)
+    text_draw.text((tx, ty), model_text, font=big_font, fill=(*bright_accent, 45))
+    bg = Image.alpha_composite(bg, text_layer)
+
+    # 5. Add radial glow behind product area (theme-colored spotlight)
+    glow_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    glow_r = int(width * 0.4)
+    glow_cx, glow_cy = width // 2, int(height * 0.42)
+    for r in range(glow_r, 0, -2):
+        alpha = int(40 * (r / glow_r))
+        glow_draw = ImageDraw.Draw(glow_layer)
+        glow_draw.ellipse([glow_cx - r, glow_cy - r, glow_cx + r, glow_cy + r],
+                          fill=(*bright_accent, alpha))
+    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=40))
+    bg = Image.alpha_composite(bg, glow_layer)
+
+    # 6. Scale product cutout — large, dominant, 80% of height
+    max_h = int(height * 0.80)
+    max_w = int(width * 0.90)
     cw, ch = cutout.size
     scale = min(max_w / cw, max_h / ch)
     new_w, new_h = int(cw * scale), int(ch * scale)
     cutout_resized = cutout.resize((new_w, new_h), Image.LANCZOS)
 
-    # 4. Position product — offset up to leave space for text at bottom
+    # 7. Drop shadow behind product
     x = (width - new_w) // 2
-    y = int(height * 0.08)  # 8% from top
-
-    # 5. Drop shadow — dark blurred copy behind product
+    y = int(height * 0.08)
     shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    shadow_offset_x, shadow_offset_y = 8, 12
-    shadow_alpha = cutout_resized.split()[3]  # get alpha channel
-    shadow_fill = Image.new("RGBA", cutout_resized.size, (0, 0, 0, 100))
+    shadow_alpha = cutout_resized.split()[3]
+    shadow_fill = Image.new("RGBA", cutout_resized.size, (0, 0, 0, 120))
     shadow_fill.putalpha(shadow_alpha)
-    shadow.paste(shadow_fill, (x + shadow_offset_x, y + shadow_offset_y))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=15))
-    bg = Image.alpha_composite(bg.convert("RGBA"), shadow)
+    shadow.paste(shadow_fill, (x + 10, y + 15))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=20))
+    bg = Image.alpha_composite(bg, shadow)
 
-    # 6. Subtle rim glow behind product — theme-colored halo
-    glow_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    glow_color = _tc.get("p1_grad_start", (13, 92, 92))
-    glow_fill = Image.new("RGBA", (new_w + 40, new_h + 40), (*glow_color, 60))
-    glow_fill = glow_fill.filter(ImageFilter.GaussianBlur(radius=30))
-    glow_layer.paste(glow_fill, (x - 20, y - 20))
-    bg = Image.alpha_composite(bg, glow_layer)
-
-    # 7. Paste product cutout on top
+    # 8. Paste product ON TOP of the big text (3D layering effect)
     bg.paste(cutout_resized, (x, y), cutout_resized)
 
-    # 8. Vignette — subtle edge darkening
+    # 9. Brand name at top — clean, medium size
+    if brand:
+        top_draw = ImageDraw.Draw(bg)
+        brand_text = brand.upper()
+        brand_font = load_font_bold(36)
+        bw, bh = text_size(top_draw, brand_text, brand_font)
+        bx = (width - bw) // 2
+        by = int(height * 0.03)
+        # Letter-spaced brand with subtle glow
+        draw_text_with_shadow(top_draw, bx, by, brand_text, brand_font,
+                              fill=(255, 255, 255, 200),
+                              shadow_color=(*bright_accent, 80), shadow_offset=2)
+
+    # 10. Model name at bottom — bold, prominent
+    if model:
+        bot_draw = ImageDraw.Draw(bg)
+        model_display = model.upper()
+        model_font = load_font_bold(52)
+        mw, mh = text_size(bot_draw, model_display, model_font)
+        # Fit if too wide
+        if mw > width * 0.85:
+            model_font = fit_text(bot_draw, model_display, int(width * 0.85), start_size=52, min_size=32, loader=load_font_bold)
+            mw, mh = text_size(bot_draw, model_display, model_font)
+        mx = (width - mw) // 2
+        my = int(height * 0.90) - mh // 2
+        draw_text_with_shadow(bot_draw, mx, my, model_display, model_font,
+                              fill=(255, 255, 255, 255),
+                              shadow_color=(0, 0, 0, 160), shadow_offset=3)
+
+    # 11. Thin accent line separator above bottom text
+    if model:
+        line_y = my - 12
+        line_draw = ImageDraw.Draw(bg)
+        line_w = int(width * 0.3)
+        line_x = (width - line_w) // 2
+        line_draw.line([(line_x, line_y), (line_x + line_w, line_y)],
+                       fill=(*bright_accent, 180), width=2)
+
+    # 12. Vignette — heavier for dramatic poster look
     vignette = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     vig_draw = ImageDraw.Draw(vignette)
-    for i in range(50):
-        alpha = int(30 * (1 - i / 50))
+    for i in range(70):
+        alpha = int(50 * (1 - i / 70))
         vig_draw.rectangle([i, i, width - i, height - i], outline=(0, 0, 0, alpha))
     bg = Image.alpha_composite(bg, vignette)
 
-    # 9. Brand + Model text at bottom
-    if brand or model:
-        draw = ImageDraw.Draw(bg)
-        text_y = int(height * 0.82)
-        # Brand name — bold, larger
-        if brand:
-            brand_font = load_font_bold(38)
-            brand_text = brand.upper()
-            bw, bh = text_size(draw, brand_text, brand_font)
-            bx = (width - bw) // 2
-            # White text with shadow
-            draw_text_with_shadow(draw, bx, text_y, brand_text, brand_font,
-                                  fill=(255, 255, 255, 240),
-                                  shadow_color=(0, 0, 0, 120), shadow_offset=2)
-            text_y += bh + 4
-        # Model name — regular, slightly smaller
-        if model:
-            model_font = load_font_regular(30)
-            model_text = model.upper()
-            mw, mh = text_size(draw, model_text, model_font)
-            mx = (width - mw) // 2
-            draw_text_with_shadow(draw, mx, text_y, model_text, model_font,
-                                  fill=(255, 255, 255, 200),
-                                  shadow_color=(0, 0, 0, 100), shadow_offset=1)
-
-    # 10. Save to R2
+    # 13. Save to R2
     frame = bg.convert("RGB")
     buf = BytesIO()
     frame.save(buf, format="PNG", optimize=True)
