@@ -2924,9 +2924,15 @@ def prep_post_image(
     cutout = Image.open(BytesIO(data)).convert("RGBA")
     cutout = trim_transparent(cutout, pad=0)
 
-    # 2. Build background — gradient bg matching P1 design
+    # 2. Build background — brighter gradient for post (not P1 dark gradient)
     _tc = get_theme_colors(theme)
-    bg = _make_gradient_bg_fast(width, height, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
+    # Use lighter gradient: blend P1 start color with white for brighter tone
+    gs = _tc.get("p1_grad_start", (13, 92, 92))
+    ge = _tc.get("p1_grad_end", (7, 56, 56))
+    # Brighten by 60% towards white
+    bright_start = tuple(min(255, int(c + (255 - c) * 0.3)) for c in gs)
+    bright_end = tuple(min(255, int(c + (255 - c) * 0.1)) for c in ge)
+    bg = _make_gradient_bg_fast(width, height, bright_start, bright_end)
 
     # 3. Scale cutout to fit: 70% of height (make room for text at bottom)
     max_h = int(height * 0.70)
@@ -2961,12 +2967,11 @@ def prep_post_image(
     # 7. Paste product cutout on top
     bg.paste(cutout_resized, (x, y), cutout_resized)
 
-    # 8. Vignette — darken edges to draw eye to center
+    # 8. Vignette — subtle edge darkening
     vignette = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     vig_draw = ImageDraw.Draw(vignette)
-    # Draw dark border rectangles with feathered opacity
-    for i in range(80):
-        alpha = int(60 * (1 - i / 80))
+    for i in range(50):
+        alpha = int(30 * (1 - i / 50))
         vig_draw.rectangle([i, i, width - i, height - i], outline=(0, 0, 0, alpha))
     bg = Image.alpha_composite(bg, vignette)
 
