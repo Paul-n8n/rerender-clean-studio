@@ -2944,7 +2944,7 @@ def prep_post_image(
 
     model_text = (model or "REEL").upper()
     # Giant text — fit to ~90% of canvas width
-    big_font = fit_text(text_draw, model_text, int(width * 0.90), start_size=200, min_size=80, loader=load_font_bold)
+    big_font, model_text = fit_text(text_draw, model_text, int(width * 0.90), start_size=200, min_size=80, loader=load_font_bold)
     tw, th = text_size(text_draw, model_text, big_font)
     # Centre vertically at 40% of canvas (slightly above centre)
     tx = (width - tw) // 2
@@ -3009,7 +3009,7 @@ def prep_post_image(
         mw, mh = text_size(bot_draw, model_display, model_font)
         # Fit if too wide
         if mw > width * 0.85:
-            model_font = fit_text(bot_draw, model_display, int(width * 0.85), start_size=52, min_size=32, loader=load_font_bold)
+            model_font, model_display = fit_text(bot_draw, model_display, int(width * 0.85), start_size=52, min_size=32, loader=load_font_bold)
             mw, mh = text_size(bot_draw, model_display, model_font)
         mx = (width - mw) // 2
         my = int(height * 0.90) - mh // 2
