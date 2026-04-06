@@ -2936,19 +2936,7 @@ def prep_post_image(
     dark_end = tuple(max(0, int(c * 0.15)) for c in ge)
     bg = _make_gradient_bg_fast(width, height, dark_start, dark_end).convert("RGBA")
 
-    # 3. Add subtle grain/noise texture (PIL-only, no numpy)
-    grain = Image.new("L", (width, height), 0)
-    grain_pixels = grain.load()
-    for gy in range(0, height, 2):
-        for gx in range(0, width, 2):
-            v = random.randint(0, 20)
-            grain_pixels[gx, gy] = v
-            if gx + 1 < width: grain_pixels[gx + 1, gy] = v
-            if gy + 1 < height: grain_pixels[gx, gy + 1] = v
-            if gx + 1 < width and gy + 1 < height: grain_pixels[gx + 1, gy + 1] = v
-    noise_rgba = Image.new("RGBA", (width, height), (255, 255, 255, 0))
-    noise_rgba.putalpha(grain)
-    bg = Image.alpha_composite(bg, noise_rgba)
+    # 3. (grain removed — too slow in production)
 
     # 4. Draw LARGE model text BEHIND product (the key visual trick)
     text_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -2968,16 +2956,14 @@ def prep_post_image(
     text_draw.text((tx, ty), model_text, font=big_font, fill=(*bright_accent, 45))
     bg = Image.alpha_composite(bg, text_layer)
 
-    # 5. Add radial glow behind product area (theme-colored spotlight)
+    # 5. Add radial glow behind product area (simple ellipse + blur)
     glow_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    glow_r = int(width * 0.4)
+    glow_draw = ImageDraw.Draw(glow_layer)
+    glow_r = int(width * 0.35)
     glow_cx, glow_cy = width // 2, int(height * 0.42)
-    for r in range(glow_r, 0, -2):
-        alpha = int(40 * (r / glow_r))
-        glow_draw = ImageDraw.Draw(glow_layer)
-        glow_draw.ellipse([glow_cx - r, glow_cy - r, glow_cx + r, glow_cy + r],
-                          fill=(*bright_accent, alpha))
-    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=40))
+    glow_draw.ellipse([glow_cx - glow_r, glow_cy - glow_r, glow_cx + glow_r, glow_cy + glow_r],
+                      fill=(*bright_accent, 35))
+    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=50))
     bg = Image.alpha_composite(bg, glow_layer)
 
     # 6. Scale product cutout — large, dominant, 80% of height
