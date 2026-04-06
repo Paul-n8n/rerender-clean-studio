@@ -38,7 +38,7 @@ THEME_COLORS = {
         "divider": (80, 80, 80, 180),
         "sticker_outline": (20, 20, 20, 255),
         "accent": (34, 34, 34, 255),
-        "brand_color": (0, 0, 0, 180),
+        "brand_color": (0, 0, 0, 90),
         "chip_bg": (0, 0, 0, 13),
         "chip_border": (34, 34, 34, 255),
         "stat_bg": (0, 0, 0, 13),
@@ -741,25 +741,17 @@ def _render_product(
     draw = ImageDraw.Draw(canvas)
 
     # ── 3. Ghost watermark (P1-B only) ───────────────────────────────
-    # Auto-fit watermark text to canvas width (max 90% of W)
+    # mockup: font-size 170px → 425px, bottom 55px → 138px from bottom
     if has_stats:
         wm_color = tc.get("watermark", (255, 255, 255, 8))
+        wm_font = load_font_bold(425)
         wm_text = (model or "").strip().upper()
         if wm_text:
             wm_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
             wm_draw = ImageDraw.Draw(wm_layer)
-            # Start at 425px and shrink until text fits within 90% of canvas width
-            wm_max_w = int(W * 0.90)
-            wm_sz = 425
-            wm_font = load_font_bold(wm_sz)
             ww, wh = text_size(wm_draw, wm_text, wm_font)
-            while ww > wm_max_w and wm_sz > 100:
-                wm_sz -= 20
-                wm_font = load_font_bold(wm_sz)
-                ww, wh = text_size(wm_draw, wm_text, wm_font)
-            wm_x = (W - ww) // 2  # centre horizontally
-            wm_y = H - CTA_H - STATS_H - wh + 20
-            wm_draw.text((wm_x, wm_y), wm_text, font=wm_font, fill=wm_color)
+            wm_draw.text((W - ww + 25, H - CTA_H - STATS_H - wh + 20),
+                         wm_text, font=wm_font, fill=wm_color)
             canvas.alpha_composite(wm_layer)
             draw = ImageDraw.Draw(canvas)
 
@@ -1059,37 +1051,18 @@ def _extract_p3_specs_from_paste(raw: str) -> dict:
         return result
 
     # Strategy 2: Try to parse from _parse_specs_paste (reuse P6 parser)
-    # Extract min-max RANGES across all models, not just first model
     try:
         specs_data = _parse_specs_paste(raw)
         if specs_data:
-            # Collect all numeric values per field
-            ratios, drags, weights, bbs = [], [], [], []
-            for row in specs_data:
-                if row.get("ratio"):
-                    m = re.search(r"(\d+\.?\d*)", row["ratio"])
-                    if m: ratios.append(float(m.group(1)))
-                if row.get("drag"):
-                    m = re.search(r"(\d+\.?\d*)", row["drag"])
-                    if m: drags.append(float(m.group(1)))
-                if row.get("wt"):
-                    m = re.search(r"(\d+\.?\d*)", row["wt"])
-                    if m: weights.append(float(m.group(1)))
-                if row.get("bb"):
-                    bbs.append(row["bb"])
-
-            # Build range strings
-            if ratios:
-                mn, mx = min(ratios), max(ratios)
-                result["gear_ratio"] = f"{mn}:1" if mn == mx else f"{mn}:1-{mx}:1"
-            if drags:
-                mn, mx = min(drags), max(drags)
-                result["max_drag"] = f"{int(mn)} kg" if mn == mx else f"{int(mn)}-{int(mx)} kg"
-            if weights:
-                mn, mx = min(weights), max(weights)
-                result["weight"] = f"{int(mn)}g" if mn == mx else f"{int(mn)}-{int(mx)}g"
-            if bbs:
-                result["bearings"] = bbs[0]  # BB is same across models
+            first = specs_data[0]
+            if first.get("ratio"):
+                result["gear_ratio"] = first["ratio"]
+            if first.get("drag"):
+                result["max_drag"] = first["drag"]
+            if first.get("wt"):
+                result["weight"] = first["wt"]
+            if first.get("bb"):
+                result["bearings"] = first["bb"]
     except Exception:
         pass
 
@@ -1119,7 +1092,7 @@ P3_SPEC_LABELS     = ["Gear Ratio", "Max Drag", "Weight"]   # 3 rows; Line Cap. 
 # Subtle table background: dark themes get white tint, light themes get dark tint
 _P3_SPEC_BG_DARK  = (255, 255, 255, 28)   # white overlay on teal/navy  — slightly more visible
 _P3_SPEC_BG_LIGHT = (0,   0,   0,   20)   # black overlay on yellow/grey
-_P3_DARK_THEMES   = {"teal", "navy", "grey"}
+_P3_DARK_THEMES   = {"teal", "navy"}
 
 
 def _render_p3(
@@ -1308,8 +1281,8 @@ def _render_p3(
     max_value_w  = (table_x1 - 16) - col_value_x   # right edge minus 16px inset
 
     is_dark = (theme or "").lower() in _P3_DARK_THEMES
-    label_fill  = (255, 255, 255, 160) if is_dark else (30, 30, 30, 230)
-    header_fill = (255, 255, 255, 110) if is_dark else (40, 40, 40, 200)
+    label_fill  = (255, 255, 255, 160) if is_dark else (60, 60, 60, 180)
+    header_fill = (255, 255, 255, 110) if is_dark else (80, 80, 80, 140)
 
     # ── "TECH SPECS" header row ────────────────────────────────────────
     header_text_y = table_y + P3_SPEC_PAD_Y + (P3_SPEC_HEADER_H - 18) // 2
@@ -1498,8 +1471,8 @@ def _render_p4(
     # ── Feature tag pill metrics ──────────────────────────────────────
     tag_text = (feature_tag or "").strip()
     tag_font = load_font_bold(32)
-    tag_bg   = STICKER_FILL              if is_dark else STICKER_FILL
-    tag_fg   = STICKER_TEXT              if is_dark else STICKER_TEXT
+    tag_bg   = STICKER_FILL              if is_dark else (20, 20, 20, 220)
+    tag_fg   = STICKER_TEXT              if is_dark else (255, 255, 255, 255)
     tag_w = tag_h = 0
     if tag_text:
         tw, th = text_size(draw, tag_text, tag_font)
@@ -1508,7 +1481,7 @@ def _render_p4(
 
     # ── Feature body metrics ──────────────────────────────────────────
     body_text  = (feature_body or "").strip()
-    body_font  = load_font_bold(32)
+    body_font  = load_font_regular(32)
     body_lines = _wrap_lines_p4(draw, body_text, text_max_w, body_font)
     body_lh    = text_size(draw, "Ag", body_font)[1]
 
@@ -1516,18 +1489,6 @@ def _render_p4(
     draw_radial_glow(canvas, px + new_w // 2, py + new_h // 2)
     draw = ImageDraw.Draw(canvas)
     canvas.alpha_composite(hero_rs, (px, py))
-    draw = ImageDraw.Draw(canvas)
-
-    # ── Left-side scrim: semi-transparent gradient so text is readable over hero ──
-    _scrim_w = int(W * 0.55)
-    _scrim = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    _scrim_draw = ImageDraw.Draw(_scrim)
-    _grad_start = _tc.get("p1_grad_start", (13, 92, 92))
-    for x in range(_scrim_w):
-        frac = 1 - (x / _scrim_w)
-        a = int(240 * frac * frac)
-        _scrim_draw.line([(x, 0), (x, H)], fill=(_grad_start[0], _grad_start[1], _grad_start[2], a))
-    canvas.alpha_composite(_scrim)
     draw = ImageDraw.Draw(canvas)
 
     # ── Brand + model header ──────────────────────────────────────────
@@ -1559,10 +1520,6 @@ def _render_p4(
         ty0 = title_bottom + gap_above
         tx1, ty1 = tx0 + tag_w, ty0 + tag_h
         draw_rounded_rect(draw, (tx0, ty0, tx1, ty1), radius=8, fill=tag_bg)
-        try:
-            draw.rounded_rectangle((tx0, ty0, tx1, ty1), radius=8, outline=(20, 20, 20, 200), width=3)
-        except Exception:
-            pass
         # Centre text inside pill using anchor='mm'
         pill_cx = tx0 + tag_w // 2
         pill_cy = ty0 + tag_h // 2
@@ -1571,7 +1528,7 @@ def _render_p4(
     else:
         feat_y += title_h + 56
 
-    body_col = (text_color[0], text_color[1], text_color[2], 255)
+    body_col = (text_color[0], text_color[1], text_color[2], 210)
     for line in body_lines:
         draw_text_align_left(draw, pad, feat_y, line, body_font, body_col)
         feat_y += body_lh + 10
@@ -1613,7 +1570,7 @@ def render_p4(
 # =====================================================================
 
 P5_GRAD_BOTTOM_H = 0.45   # bottom gradient covers this fraction of canvas
-P5_GRAD_TOP_H    = 0.30   # top gradient covers this fraction of canvas
+P5_GRAD_TOP_H    = 0.22   # top gradient covers this fraction of canvas
 P5_CHIP_BOTTOM   = 52     # px from bottom edge to chip row baseline
 P5_CHIP_SIZE     = 38     # chip font size
 
@@ -1714,12 +1671,12 @@ def _render_p5(
             bg_draw.line([(0, H - bot_h + y), (W, H - bot_h + y)], fill=(0, 0, 0, a))
         canvas.alpha_composite(bot_grad)
 
-        # Top gradient (stronger for text readability over dark photos)
+        # Top gradient
         top_grad = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         tg_draw  = ImageDraw.Draw(top_grad)
         top_h    = int(H * P5_GRAD_TOP_H)
         for y in range(top_h):
-            a = int(220 * (1 - y / top_h) ** 1.4)
+            a = int(100 * (1 - y / top_h) ** 1.8)
             tg_draw.line([(0, y), (W, y)], fill=(0, 0, 0, a))
         canvas.alpha_composite(top_grad)
         draw = ImageDraw.Draw(canvas)
@@ -1728,7 +1685,7 @@ def _render_p5(
         # ── Composite mode (fallback cutout on themed background) ──────
         # Use themed bg so cutout edge anti-aliasing blends correctly
         _tc = get_theme_colors(theme)
-        canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
+    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
         draw   = ImageDraw.Draw(canvas)
         tc         = get_theme_colors(theme)
         text_color = tc["text"]
@@ -2478,7 +2435,7 @@ def _render_p7(
     else:
         # Theme background
         _tc = get_theme_colors(theme)
-        canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
+    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
         tc         = get_theme_colors(theme)
         text_color = tc["text"]
 
@@ -2971,20 +2928,74 @@ def prep_post_image(
     _tc = get_theme_colors(theme)
     bg = _make_gradient_bg_fast(width, height, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
 
-    # 3. Scale cutout to fit: 82% of height, fill the square
-    max_h = int(height * 0.82)
-    max_w = int(width * 0.92)
+    # 3. Scale cutout to fit: 70% of height (make room for text at bottom)
+    max_h = int(height * 0.70)
+    max_w = int(width * 0.85)
     cw, ch = cutout.size
     scale = min(max_w / cw, max_h / ch)
     new_w, new_h = int(cw * scale), int(ch * scale)
     cutout_resized = cutout.resize((new_w, new_h), Image.LANCZOS)
 
-    # 4. Centre on canvas
+    # 4. Position product — offset up to leave space for text at bottom
     x = (width - new_w) // 2
-    y = (height - new_h) // 2
+    y = int(height * 0.08)  # 8% from top
+
+    # 5. Drop shadow — dark blurred copy behind product
+    shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    shadow_offset_x, shadow_offset_y = 8, 12
+    shadow_alpha = cutout_resized.split()[3]  # get alpha channel
+    shadow_fill = Image.new("RGBA", cutout_resized.size, (0, 0, 0, 100))
+    shadow_fill.putalpha(shadow_alpha)
+    shadow.paste(shadow_fill, (x + shadow_offset_x, y + shadow_offset_y))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=15))
+    bg = Image.alpha_composite(bg.convert("RGBA"), shadow)
+
+    # 6. Subtle rim glow behind product — theme-colored halo
+    glow_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    glow_color = _tc.get("p1_grad_start", (13, 92, 92))
+    glow_fill = Image.new("RGBA", (new_w + 40, new_h + 40), (*glow_color, 60))
+    glow_fill = glow_fill.filter(ImageFilter.GaussianBlur(radius=30))
+    glow_layer.paste(glow_fill, (x - 20, y - 20))
+    bg = Image.alpha_composite(bg, glow_layer)
+
+    # 7. Paste product cutout on top
     bg.paste(cutout_resized, (x, y), cutout_resized)
 
-    # 5. Save to R2
+    # 8. Vignette — darken edges to draw eye to center
+    vignette = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    vig_draw = ImageDraw.Draw(vignette)
+    # Draw dark border rectangles with feathered opacity
+    for i in range(80):
+        alpha = int(60 * (1 - i / 80))
+        vig_draw.rectangle([i, i, width - i, height - i], outline=(0, 0, 0, alpha))
+    bg = Image.alpha_composite(bg, vignette)
+
+    # 9. Brand + Model text at bottom
+    if brand or model:
+        draw = ImageDraw.Draw(bg)
+        text_y = int(height * 0.82)
+        # Brand name — bold, larger
+        if brand:
+            brand_font = load_font_bold(38)
+            brand_text = brand.upper()
+            bw, bh = text_size(draw, brand_text, brand_font)
+            bx = (width - bw) // 2
+            # White text with shadow
+            draw_text_with_shadow(draw, bx, text_y, brand_text, brand_font,
+                                  fill=(255, 255, 255, 240),
+                                  shadow_color=(0, 0, 0, 120), shadow_offset=2)
+            text_y += bh + 4
+        # Model name — regular, slightly smaller
+        if model:
+            model_font = load_font_regular(30)
+            model_text = model.upper()
+            mw, mh = text_size(draw, model_text, model_font)
+            mx = (width - mw) // 2
+            draw_text_with_shadow(draw, mx, text_y, model_text, model_font,
+                                  fill=(255, 255, 255, 200),
+                                  shadow_color=(0, 0, 0, 100), shadow_offset=1)
+
+    # 10. Save to R2
     frame = bg.convert("RGB")
     buf = BytesIO()
     frame.save(buf, format="PNG", optimize=True)
