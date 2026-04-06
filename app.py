@@ -2435,7 +2435,7 @@ def _render_p7(
     else:
         # Theme background
         _tc = get_theme_colors(theme)
-    canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
+        canvas = _make_gradient_bg_fast(W, H, _tc.get("p1_grad_start", (13, 92, 92)), _tc.get("p1_grad_end", (7, 56, 56)))
         tc         = get_theme_colors(theme)
         text_color = tc["text"]
 
