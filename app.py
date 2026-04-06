@@ -2936,12 +2936,18 @@ def prep_post_image(
     dark_end = tuple(max(0, int(c * 0.15)) for c in ge)
     bg = _make_gradient_bg_fast(width, height, dark_start, dark_end).convert("RGBA")
 
-    # 3. Add subtle grain/noise texture
-    import numpy as np
-    noise = np.random.randint(0, 25, (height, width), dtype=np.uint8)
-    noise_img = Image.fromarray(noise, mode='L').convert("RGBA")
+    # 3. Add subtle grain/noise texture (PIL-only, no numpy)
+    grain = Image.new("L", (width, height), 0)
+    grain_pixels = grain.load()
+    for gy in range(0, height, 2):
+        for gx in range(0, width, 2):
+            v = random.randint(0, 20)
+            grain_pixels[gx, gy] = v
+            if gx + 1 < width: grain_pixels[gx + 1, gy] = v
+            if gy + 1 < height: grain_pixels[gx, gy + 1] = v
+            if gx + 1 < width and gy + 1 < height: grain_pixels[gx + 1, gy + 1] = v
     noise_rgba = Image.new("RGBA", (width, height), (255, 255, 255, 0))
-    noise_rgba.putalpha(Image.fromarray(noise, mode='L'))
+    noise_rgba.putalpha(grain)
     bg = Image.alpha_composite(bg, noise_rgba)
 
     # 4. Draw LARGE model text BEHIND product (the key visual trick)
