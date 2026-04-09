@@ -21,7 +21,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-03a"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-09a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -632,7 +632,8 @@ def _draw_outlined_badge(draw: ImageDraw.ImageDraw, text: str, x1: int, y0: int,
 
 
 def _draw_stats_bar(canvas: Image.Image, y_top: int, W: int,
-                    bearings: str, gear_ratio: str, max_drag: str, tc: dict):
+                    bearings: str, gear_ratio: str, max_drag: str, tc: dict,
+                    product_type: str = "reel"):
     """Draw a 3-column stats bar. Dimensions from mockup ×2.5:
     left/right 14→35, gap 4→10, stat-val 19→48px, stat-lbl 7→18px,
     pill padding 7→18, border-radius 5→13.
@@ -651,11 +652,18 @@ def _draw_stats_bar(canvas: Image.Image, y_top: int, W: int,
     val_font = load_font_bold(48)    # mockup: 19px → 48
     lbl_font = load_font_bold(18)    # mockup: 7px → 18
 
-    stats = [
-        (bearings or "\u2014", "BEARINGS"),
-        (gear_ratio or "\u2014", "GEAR RATIO"),
-        (max_drag or "\u2014", "MAX DRAG"),
-    ]
+    if product_type == "line":
+        stats = [
+            (bearings or "\u2014", "MATERIAL"),
+            (gear_ratio or "\u2014", "STRENGTH"),
+            (max_drag or "\u2014", "LENGTH"),
+        ]
+    else:
+        stats = [
+            (bearings or "\u2014", "BEARINGS"),
+            (gear_ratio or "\u2014", "GEAR RATIO"),
+            (max_drag or "\u2014", "MAX DRAG"),
+        ]
 
     overlay = Image.new("RGBA", (W, canvas.size[1]), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
@@ -692,6 +700,7 @@ def _render_product(
     bearings: str = "",
     gear_ratio: str = "",
     max_drag: str = "",
+    product_type: str = "reel",
 ) -> bytes:
     """Compose a 1000x1000 P1 product card (K + Hybrid Mix design).
 
@@ -894,7 +903,7 @@ def _render_product(
     # mockup: bottom 44, left/right 14, gap 4, stat-val 19→48, stat-lbl 7→18
     if has_stats:
         stats_y = H - CTA_H - STATS_H
-        _draw_stats_bar(canvas, stats_y, W, bearings, gear_ratio, max_drag, tc)
+        _draw_stats_bar(canvas, stats_y, W, bearings, gear_ratio, max_drag, tc, product_type)
         draw = ImageDraw.Draw(canvas)
 
     # ── 13. Full-width CTA bar (mockup: h 40 → 100, font 13 → 33) ──
@@ -934,14 +943,16 @@ def render_p1(
     chip4: str = Query(""),
     chip5: str = Query(""),
     theme: str = Query("yellow"),
-    bearings:   str = Query(""),
-    gear_ratio: str = Query(""),
-    max_drag:   str = Query(""),
+    bearings:     str = Query(""),
+    gear_ratio:   str = Query(""),
+    max_drag:     str = Query(""),
+    product_type: str = Query("reel"),
 ):
     png = _render_product(
         _load_hero(key), theme, brand, model,
         chip1, chip2, chip3, chip4, chip5,
         bearings=bearings, gear_ratio=gear_ratio, max_drag=max_drag,
+        product_type=product_type,
     )
     return Response(content=png, media_type="image/png")
 
@@ -1069,6 +1080,74 @@ def _extract_p3_specs_from_paste(raw: str) -> dict:
     return result
 
 
+def _extract_p3_specs_from_paste_line(raw: str) -> dict:
+    """Extract min-max ranges for fishing LINE specs from specs_paste.
+    Returns dict with keys: strength, diameter, pe_range.
+    """
+    result = {}
+    text = raw.strip()
+    if not text:
+        return result
+
+    # Collect all LB values, diameter values, and PE values
+    lbs = []
+    dias = []
+    pes = []
+
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        # Match LB values: "#10lbs", "10LB", "20lb", "PE 0.8/ 16.8 LB"
+        for m in re.finditer(r'#?(\d+(?:\.\d+)?)\s*lbs?\b', line, re.I):
+            lbs.append(float(m.group(1)))
+        # Match standalone lb patterns like "16.8 LB" (from PE lines)
+        for m in re.finditer(r'(\d+(?:\.\d+)?)\s*LB\b', line, re.I):
+            v = float(m.group(1))
+            if v not in lbs:
+                lbs.append(v)
+
+        # Match diameter: "0.10mm", "0.10", "DIAMETER: 0.30mm"
+        for m in re.finditer(r'(?:diameter|dia(?:\s*meter)?)\s*[:=]?\s*(\d+\.\d+)\s*(?:mm)?', line, re.I):
+            dias.append(float(m.group(1)))
+        # Also catch inline diameter like "0.35mm" without label
+        for m in re.finditer(r'\b(0\.\d{2,3})\s*mm\b', line, re.I):
+            v = float(m.group(1))
+            if v not in dias:
+                dias.append(v)
+        # Catch bare decimals in patterns like "3LB - 0.104mm"
+        for m in re.finditer(r'[-–]\s*(0\.\d+)\s*mm', line, re.I):
+            v = float(m.group(1))
+            if v not in dias:
+                dias.append(v)
+        # Catch comma-dash: "8LB , 4.3kg - 0.117mm"
+        for m in re.finditer(r'[-–]\s*(0\.\d+)(?:mm)?$', line, re.I):
+            v = float(m.group(1))
+            if v not in dias:
+                dias.append(v)
+
+        # Match PE values: "PE 0.8", "PE.NO: 1.2", "PE1.5", "PE NO: PE2"
+        for m in re.finditer(r'PE\.?(?:\s*NO)?[:.]?\s*(?:PE)?(\d+(?:\.\d+)?)', line, re.I):
+            pes.append(float(m.group(1)))
+        # Also match standalone "PE 0.8/ 16.8 LB"
+        for m in re.finditer(r'\bPE\s+(\d+(?:\.\d+)?)\s*/\s*\d', line, re.I):
+            v = float(m.group(1))
+            if v not in pes:
+                pes.append(v)
+
+    if lbs:
+        mn, mx = min(lbs), max(lbs)
+        result["strength"] = f"{mn:g} LB" if mn == mx else f"{mn:g}-{mx:g} LB"
+    if dias:
+        mn, mx = min(dias), max(dias)
+        result["diameter"] = f"{mn:.2f}mm" if mn == mx else f"{mn:.2f}-{mx:.2f}mm"
+    if pes:
+        mn, mx = min(pes), max(pes)
+        result["pe_range"] = f"PE {mn:g}" if mn == mx else f"PE {mn:g}-{mx:g}"
+
+    return result
+
+
 # =====================================================================
 # /render/p3 — Spec Card (Technical Validation Slide)
 # Layout: Brand + Model header, size-range badge, hero (55% height),
@@ -1087,7 +1166,8 @@ P3_SPEC_ROW_H      = 36           # height of each spec data row (px)  — tight
 P3_SPEC_PAD_Y      = 6            # inner vertical padding top/bottom    — tight
 P3_SPEC_HEADER_H   = 22           # height of "TECH SPECS" header row inside pill
 P3_SPEC_RADIUS     = 14           # corner radius of table background pill
-P3_SPEC_LABELS     = ["Gear Ratio", "Max Drag", "Weight"]   # 3 rows; Line Cap. removed (varies per size)
+P3_SPEC_LABELS      = ["Gear Ratio", "Max Drag", "Weight"]   # 3 rows; Line Cap. removed (varies per size)
+P3_SPEC_LABELS_LINE = ["Strength", "Diameter", "PE Range"]  # fishing line variant
 
 # Subtle table background: dark themes get white tint, light themes get dark tint
 _P3_SPEC_BG_DARK  = (255, 255, 255, 28)   # white overlay on teal/navy  — slightly more visible
@@ -1107,6 +1187,7 @@ def _render_p3(
     gear_ratio: str,
     max_drag: str,
     weight: str,
+    product_type: str = "reel",
 ) -> bytes:
     """Compose a 1024×1024 P3 spec card and return raw PNG bytes.
     Chips: chip1=BB count, chip2=gear ratio, chip3=max drag (range).
@@ -1170,8 +1251,9 @@ def _render_p3(
     total_chips_w += num_dividers * (CHIP_GAP_X + DIVIDER_WIDTH)
 
     # ── Spec table metrics ────────────────────────────────────────────
+    spec_labels  = P3_SPEC_LABELS_LINE if product_type == "line" else P3_SPEC_LABELS
     spec_values  = [gear_ratio, max_drag, weight]
-    n_rows       = len(P3_SPEC_LABELS)
+    n_rows       = len(spec_labels)
     # Total pill height = top-pad + header + data rows + bottom-pad
     spec_table_h = P3_SPEC_PAD_Y + P3_SPEC_HEADER_H + n_rows * P3_SPEC_ROW_H + P3_SPEC_PAD_Y
 
@@ -1298,7 +1380,7 @@ def _render_p3(
     # ── Data rows (start below header) ────────────────────────────────
     data_top = table_y + P3_SPEC_PAD_Y + P3_SPEC_HEADER_H   # y where first data row begins
 
-    for i, (label, value) in enumerate(zip(P3_SPEC_LABELS, spec_values)):
+    for i, (label, value) in enumerate(zip(spec_labels, spec_values)):
         row_top = data_top + i * P3_SPEC_ROW_H
         text_y  = row_top + (P3_SPEC_ROW_H - 26) // 2
 
@@ -1336,38 +1418,47 @@ def render_p3(
     weight:        str = Query("\u2014"),
     line_capacity: str = Query("\u2014"),        # accepted but not rendered (varies per size)
     specs_paste:   str = Query(""),              # multi-model specs text; auto-extracts gear_ratio/max_drag/weight if individual fields are dashes
+    product_type:  str = Query("reel"),
 ):
     """
     P3 — spec card. Themed background, brand/model header, size-range
-    badge, hero at 55% height, 3 highlight chips, 3-row spec table
-    (Gear Ratio / Max Drag / Weight).
-    chip3 = max drag range shown as scannable chip.
-    line_capacity accepted for forward-compat but not rendered.
+    badge, hero at 55% height, 3 highlight chips, 3-row spec table.
+    Reel: Gear Ratio / Max Drag / Weight.
+    Line: Strength / Diameter / PE Range.
 
     If specs_paste is provided and individual spec fields are still default
-    dashes, auto-extracts from the first spec row in specs_paste.
+    dashes, auto-extracts from specs_paste.
     """
     # Auto-extract from specs_paste if individual fields are dashes
     if specs_paste and specs_paste.strip():
-        _extracted = _extract_p3_specs_from_paste(specs_paste)
-        if gear_ratio == "\u2014" and _extracted.get("gear_ratio"):
-            gear_ratio = _extracted["gear_ratio"]
-        if max_drag == "\u2014" and _extracted.get("max_drag"):
-            max_drag = _extracted["max_drag"]
-        if weight == "\u2014" and _extracted.get("weight"):
-            weight = _extracted["weight"]
-        # Also auto-fill chips from specs if they're defaults
-        if chip1 == "3BB" and _extracted.get("bearings"):
-            chip1 = _extracted["bearings"]
-        if chip2 == "5.1:1" and _extracted.get("gear_ratio"):
-            chip2 = _extracted["gear_ratio"]
-        if chip3 == "6 kg" and _extracted.get("max_drag"):
-            chip3 = _extracted["max_drag"]
+        if product_type == "line":
+            _extracted = _extract_p3_specs_from_paste_line(specs_paste)
+            if gear_ratio == "\u2014" and _extracted.get("strength"):
+                gear_ratio = _extracted["strength"]
+            if max_drag == "\u2014" and _extracted.get("diameter"):
+                max_drag = _extracted["diameter"]
+            if weight == "\u2014" and _extracted.get("pe_range"):
+                weight = _extracted["pe_range"]
+        else:
+            _extracted = _extract_p3_specs_from_paste(specs_paste)
+            if gear_ratio == "\u2014" and _extracted.get("gear_ratio"):
+                gear_ratio = _extracted["gear_ratio"]
+            if max_drag == "\u2014" and _extracted.get("max_drag"):
+                max_drag = _extracted["max_drag"]
+            if weight == "\u2014" and _extracted.get("weight"):
+                weight = _extracted["weight"]
+            # Also auto-fill chips from specs if they're defaults
+            if chip1 == "3BB" and _extracted.get("bearings"):
+                chip1 = _extracted["bearings"]
+            if chip2 == "5.1:1" and _extracted.get("gear_ratio"):
+                chip2 = _extracted["gear_ratio"]
+            if chip3 == "6 kg" and _extracted.get("max_drag"):
+                chip3 = _extracted["max_drag"]
 
     hero = _load_hero(key)
     png  = _render_p3(
         hero, theme, brand, model, chip1, chip2, chip3,
-        size_range, gear_ratio, max_drag, weight,
+        size_range, gear_ratio, max_drag, weight, product_type,
     )
     return Response(content=png, media_type="image/png")
 
@@ -2058,6 +2149,215 @@ def _parse_specs_paste(raw: str) -> list:
     return models
 
 
+# ── Line product P6 parser ────────────────────────────────────────────
+# All possible line spec columns (auto-detected — only cols with data shown)
+P6_LINE_ALL_KEYS = ["DIA", "PE", "KG", "LENGTH"]
+P6_LINE_COL_LABELS = {
+    "SIZE":   "SIZE",
+    "DIA":    "DIA (mm)",
+    "PE":     "PE",
+    "KG":     "KG",
+    "LENGTH": "LENGTH",
+}
+
+_P6_LINE_ALIASES = {
+    "SIZE":          "SIZE",
+    "STRENGTH":      "SIZE",
+    "LB TEST":       "SIZE",
+    "LINE TEST":     "SIZE",
+    # Diameter
+    "DIAMETER":      "DIA",
+    "DIA":           "DIA",
+    "DIA METER":     "DIA",         # typo in Yo-Zuri sample
+    "LINE DIAMETER": "DIA",
+    "AVG DIAMETER":  "_SKIP",       # imperial duplicate
+    # PE number
+    "PE":            "PE",
+    "PE NO":         "PE",
+    "PE.NO":         "PE",
+    # KG test
+    "KG TEST":       "KG",
+    "KG":            "KG",
+    "KGTEST":        "KG",
+    "BERAT":         "KG",          # Malay
+    # Length
+    "LENGTH":        "LENGTH",
+    "LENGHT":        "LENGTH",      # typo in Seahawk sample
+    "PANJANG":       "LENGTH",      # Malay
+    "LINE LENGTH":   "LENGTH",
+    "SPOOL CAPACITY / M": "LENGTH",
+    "SPOOL CAPACITY": "LENGTH",
+    # Skip
+    "COLOR":         "_SKIP",
+    "COLOUR":        "_SKIP",
+    "WARNA":         "_SKIP",
+}
+
+
+def _parse_specs_paste_line(raw: str) -> list:
+    """Parse fishing line specs text into list of dicts.
+
+    Each dict represents one size variant with keys: SIZE, DIA, PE, KG, LENGTH.
+    Handles 6 formats from real seller page samples:
+      1. Block-per-size: 10LB / DIAMETER: 0.23mm / LENGTH: 100m
+      2. Inline slash:   0.35mm / 398m / 10kg
+      3. Inline comma-dash: 8LB , 4.3kg - 0.117mm
+      4. Simple LB-dia:  3LB - 0.104mm
+      5. PE/LB grouped with separate DIA section
+      6. Table format (header row + data rows)
+
+    Returns list of dicts. Auto-detect: only keys with data are populated.
+    """
+    if not raw or not raw.strip():
+        return []
+
+    lines = [l.strip() for l in raw.strip().split("\n") if l.strip()]
+    models = []
+    current = {}
+
+    # Pre-filter: skip marketing text, feature bullets, brand descriptions
+    _SKIP_PATTERNS = re.compile(
+        r'^[-➸➡️•●]?\s*(?:made|brand|ultra|super|high|extra|premium|exceptional|'
+        r'constructed|soft|smooth|superior|outstanding|100%|new\s+arrival|'
+        r'ready\s+stock|x\d+\s+(?:braid|strength)|resists|fish\s+with|'
+        r'enhanced|extremely|color\s*[-:=]|colour\s*[-:=]|warna)', re.I)
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Skip marketing/feature lines
+        clean = re.sub(r'^[-➸➡️•●]\s*', '', stripped).strip()
+        if _SKIP_PATTERNS.match(clean):
+            continue
+
+        # Skip lines that are just product titles (all caps, >40 chars, no numbers)
+        if len(clean) > 40 and not re.search(r'\d', clean):
+            continue
+
+        # --- Try colon/labeled format: "DIAMETER: 0.23mm" ---
+        if ":" in stripped:
+            l, _, v = stripped.partition(":")
+            l_up = l.strip().upper()
+            l_clean = re.sub(r'[.\s]+$', '', l_up).strip()
+            v_s = v.strip()
+
+            c = _P6_LINE_ALIASES.get(l_up) or _P6_LINE_ALIASES.get(l_clean)
+            if not c:
+                for alias_key, alias_val in _P6_LINE_ALIASES.items():
+                    if l_up.startswith(alias_key) or l_clean.startswith(alias_key):
+                        c = alias_val
+                        break
+            if c and c != "_SKIP" and v_s:
+                current[c] = v_s
+                continue
+
+        # --- Try bare LB line: "#10lbs", "10LB", "20lb" ---
+        m_lb = re.match(r'^#?(\d+(?:\.\d+)?)\s*lbs?\s*$', stripped, re.I)
+        if m_lb:
+            if current and "SIZE" in current:
+                models.append(current)
+            current = {"SIZE": f"{m_lb.group(1)}LB"}
+            continue
+
+        # --- Try PE/LB combo: "PE 0.8/ 16.8 LB" ---
+        m_pe_lb = re.match(r'^PE\s+(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\s*LB', stripped, re.I)
+        if m_pe_lb:
+            if current and "SIZE" in current:
+                models.append(current)
+            current = {"SIZE": f"{m_pe_lb.group(2)}LB", "PE": m_pe_lb.group(1)}
+            continue
+
+        # --- Try inline slash format: "0.35mm / 398m / 10kg" ---
+        if "/" in stripped and re.search(r'\d', stripped):
+            parts = [p.strip() for p in stripped.split("/")]
+            if len(parts) >= 2 and not re.match(r'^PE\s', stripped, re.I):
+                for part in parts:
+                    # diameter
+                    dm = re.match(r'^(0\.\d+)\s*(?:mm)?$', part, re.I)
+                    if dm:
+                        current["DIA"] = dm.group(1) + "mm"
+                        continue
+                    # length
+                    lm = re.match(r'^(\d+)\s*(?:m|yds?)$', part, re.I)
+                    if lm:
+                        current["LENGTH"] = part
+                        continue
+                    # kg
+                    km = re.match(r'^(\d+(?:\.\d+)?)\s*kg$', part, re.I)
+                    if km:
+                        current["KG"] = part
+                        continue
+                continue
+
+        # --- Try inline comma-dash: "8LB , 4.3kg - 0.117mm" ---
+        m_inline = re.match(
+            r'^(\d+)\s*LB\s*[,]\s*(\d+(?:\.\d+)?)\s*kg\s*[-–]\s*(0\.\d+)\s*(?:mm)?$',
+            stripped, re.I)
+        if m_inline:
+            if current and "SIZE" in current:
+                models.append(current)
+            current = {
+                "SIZE": f"{m_inline.group(1)}LB",
+                "KG": f"{m_inline.group(2)}kg",
+                "DIA": f"{m_inline.group(3)}mm",
+            }
+            continue
+
+        # --- Try simple LB - dia: "3LB - 0.104mm" ---
+        m_simple = re.match(r'^(\d+)\s*LB\s*[-–]\s*(0\.\d+)\s*(?:mm)?$', stripped, re.I)
+        if m_simple:
+            if current and "SIZE" in current:
+                models.append(current)
+            current = {
+                "SIZE": f"{m_simple.group(1)}LB",
+                "DIA": f"{m_simple.group(2)}mm",
+            }
+            continue
+
+        # --- Try "SIZE: 10LB" or just "SIZE:" prefix ---
+        m_size = re.match(r'^SIZE\s*:\s*(\d+(?:\.\d+)?)\s*LB', stripped, re.I)
+        if m_size:
+            if current and "SIZE" in current:
+                models.append(current)
+            current = {"SIZE": f"{m_size.group(1)}LB"}
+            continue
+
+        # --- Try inline lb / mm format: "20lb\n0.35mm / 398m / 10kg" ---
+        # (lb on its own line, specs on next — handled by bare LB + slash above)
+
+    # Finalize last model
+    if current and "SIZE" in current:
+        models.append(current)
+
+    # Fill missing keys with "—"
+    all_possible = ["SIZE"] + P6_LINE_ALL_KEYS
+    for m in models:
+        for k in all_possible:
+            if k not in m:
+                m[k] = "\u2014"
+
+    # Remove junk rows with no spec data (only SIZE, everything else is —)
+    models = [m for m in models
+              if any(m.get(k, "\u2014") != "\u2014" for k in P6_LINE_ALL_KEYS)]
+
+    # Auto-detect which columns have data
+    # Drop columns where ALL values are identical (e.g. LENGTH=110m for all)
+    # or all are "—"
+    active_keys = []
+    for k in P6_LINE_ALL_KEYS:
+        vals = [m.get(k, "\u2014") for m in models]
+        unique = set(vals) - {"\u2014"}
+        if len(unique) == 0:
+            continue  # all dashes — skip
+        if len(unique) == 1 and len(models) > 1:
+            continue  # all same value — skip (constant, not interesting)
+        active_keys.append(k)
+
+    return models, active_keys
+
+
 def _render_p6(
     watermark_img:  Optional[Image.Image],
     slot_used:      str,
@@ -2068,6 +2368,8 @@ def _render_p6(
     chip2:          str,
     chip3:          str,
     specs_data:     list,
+    spec_keys:      list = None,
+    col_labels:     dict = None,
 ) -> bytes:
     """Compose a 1024×1024 P6 Specs Comparison Table card.
 
@@ -2173,8 +2475,12 @@ def _render_p6(
     chip_y_center = chip_y_top + chip_row_h // 2
 
     # ── Specs table ───────────────────────────────────────────────────
+    _sk = spec_keys if spec_keys is not None else P6_SPEC_KEYS
+    _cl = col_labels if col_labels is not None else P6_COL_LABELS
+    # For line products, first column is "SIZE" instead of "MODEL"
+    _first_col = "SIZE" if "SIZE" in _cl else "MODEL"
     n_models  = len(specs_data)
-    all_cols  = ["MODEL"] + P6_SPEC_KEYS   # 5 columns
+    all_cols  = [_first_col] + _sk
     n_cols    = len(all_cols)
     table_x0  = pad
     table_x1  = W - pad
@@ -2225,7 +2531,7 @@ def _render_p6(
         header_y    = table_top + (P6_COL_HEADER_H - 20) // 2
 
         for ci, col_key in enumerate(all_cols):
-            label = P6_COL_LABELS.get(col_key, col_key)
+            label = _cl.get(col_key, col_key)
             cx    = col_xs[ci] + 12
             draw.text((cx, header_y), label, font=header_font, fill=header_fill)
 
@@ -2313,17 +2619,25 @@ def render_p6(
     chip2:        str = Query(""),
     chip3:        str = Query(""),
     specs_paste:  str = Query(""),
+    product_type: str = Query("reel"),
 ):
     """
     P6 — Specs Comparison Table.
-    Parses specs_paste text (multi-model specs from seller page) into a
-    structured comparison table with ghost reel watermark.
+    Reel: parses multi-model reel specs into MODEL/BB/RATIO/WT/DRAG table.
+    Line: parses fishing line specs into SIZE/DIA/PE/KG/LENGTH table (auto-detect columns).
     If specs_paste is empty, renders a "NO SPECS DATA" fallback card.
     """
     import traceback
 
     # Parse specs text
-    specs_data = _parse_specs_paste(specs_paste)
+    spec_keys = None
+    col_labels = None
+    if product_type == "line":
+        specs_data, active_keys = _parse_specs_paste_line(specs_paste)
+        spec_keys = active_keys
+        col_labels = P6_LINE_COL_LABELS
+    else:
+        specs_data = _parse_specs_paste(specs_paste)
 
     # Load optional ghost watermark (same as P8 — never raises)
     watermark_img, slot_used = None, ""
@@ -2334,7 +2648,7 @@ def render_p6(
         png = _render_p6(
             watermark_img, slot_used, theme,
             brand, model, chip1, chip2, chip3,
-            specs_data,
+            specs_data, spec_keys, col_labels,
         )
     except Exception as e:
         raise HTTPException(status_code=500,
