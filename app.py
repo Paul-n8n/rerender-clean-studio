@@ -21,7 +21,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-09a"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-16a"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -149,11 +149,11 @@ DIVIDER_COLOR = (80, 80, 80, 180)
 CHIP_TEXT_COLOR = (30, 30, 30, 255)
 
 # ======================== GLOW SETTINGS ===============================
-GLOW_W = 500
-GLOW_H = 250
+GLOW_W = 620        # wider halo (Canva-style soft pool)
+GLOW_H = 360        # taller / rounder (was 250 — felt too flat)
 GLOW_COLOR = (255, 255, 255)
-GLOW_ALPHA = 60
-GLOW_Y_OFFSET = 50
+GLOW_ALPHA = 90     # was 60 — more visible halo behind hero
+GLOW_Y_OFFSET = 30  # was 50 — pull glow up so it cradles the reel body
 GLOW_NOISE = 3
 
 
@@ -764,24 +764,26 @@ def _render_product(
             canvas.alpha_composite(wm_layer)
             draw = ImageDraw.Draw(canvas)
 
-    # ── 4. Brand text (mockup: 12px → 30px, weight 600, letter-spacing 3.5→9px)
+    # ── 4. Brand text (Canva-style: bolder, larger uppercase) ──
+    # was: regular 30px / brand_color rgba (255,255,255,128)
+    # now: bold 52px / fully opaque white (matches "DAIWA 2024" weight in Canva ref)
     brand_text = (brand or "").strip().upper()
-    brand_color = tc.get("brand_color", (255, 255, 255, 128))
-    brand_font = load_font_regular(30)
+    brand_color = tc.get("brand_color_p1", (255, 255, 255, 235))
+    brand_font = load_font_bold(52)
     brand_h = text_size(draw, brand_text, brand_font)[1]
     draw_text_align_left(draw, LEFT, TOP, brand_text, brand_font, brand_color)
 
-    # ── 5. Gold accent line under brand (mockup: top 36 → 90, w 30 → 75, h 2.5 → 6)
-    accent_line_y = 90
+    # ── 5. Gold accent line under brand (was top 90 → 130 to clear taller brand)
+    accent_line_y = 130
     draw.rectangle([(LEFT, accent_line_y), (LEFT + 75, accent_line_y + 6)],
                    fill=accent)
 
-    # ── 6. Model text (mockup: top 44 → 110, font 46px → 115px, weight 900)
+    # ── 6. Model text (was 115px max → 130px max, more dominant) ──
     model_text = (model or "").strip().upper()
-    MODEL_Y = 110
+    MODEL_Y = 150
     model_max_w = int(W * 0.65)
     model_font, model_text = fit_text(draw, model_text, max_w=model_max_w,
-                                      start_size=115, min_size=60, loader=load_font_bold)
+                                      start_size=130, min_size=60, loader=load_font_bold)
     model_h = text_size(draw, model_text, model_font)[1]
     draw_text_align_left(draw, LEFT, MODEL_Y, model_text, model_font, text_color)
 
@@ -861,9 +863,9 @@ def _render_product(
     canvas.alpha_composite(hero_rs, (px, py))
     draw = ImageDraw.Draw(canvas)
 
-    # ── 10. Draw feature chips (mockup: top 112 → 280) ──────────────
+    # ── 10. Draw feature chips (shifted down to clear bigger title) ──
     if features:
-        CHIPS_TOP = 280   # mockup: top 112px → 280
+        CHIPS_TOP = 320   # was 280 — model font bumped to 130, needs more room
         chip_h = CHIP_FONT_SZ + CHIP_PAD_Y * 2
         chip_start_y = CHIPS_TOP
 
