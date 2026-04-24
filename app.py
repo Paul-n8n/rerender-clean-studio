@@ -21,7 +21,7 @@ def root():
     return {"ok": True, "service": "rerender-clean-studio"}
 
 
-VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-16a"
+VERSION = "P1+P2+P3+P4+P5+P6+P7+P8 v2026-04-16b"
 
 # ======================== STICKER UI STANDARDS ========================
 STICKER_RADIUS = 14
@@ -631,6 +631,99 @@ def _draw_outlined_badge(draw: ImageDraw.ImageDraw, text: str, x1: int, y0: int,
     draw_text_centered_in_box(draw, bx0, y0, bw, bh, text, font, text_color)
 
 
+def _parse_color_variants(s: str):
+    """Parse 'NAME#HEX | NAME#HEX' into [(NAME, (r,g,b)), ...]. Max 4.
+    Accepts 3- or 6-digit hex, with or without leading '#'."""
+    if not s:
+        return []
+    out = []
+    for entry in s.split("|"):
+        entry = entry.strip()
+        if not entry or "#" not in entry:
+            continue
+        name, hex_ = entry.rsplit("#", 1)
+        name = name.strip().upper()
+        hex_ = hex_.strip().lstrip("#")
+        if len(hex_) == 3:
+            hex_ = "".join(c * 2 for c in hex_)
+        if len(hex_) != 6:
+            continue
+        try:
+            r = int(hex_[0:2], 16)
+            g = int(hex_[2:4], 16)
+            b = int(hex_[4:6], 16)
+        except ValueError:
+            continue
+        if name:
+            out.append((name, (r, g, b)))
+        if len(out) >= 4:
+            break
+    return out
+
+
+def _draw_color_variant_strip(canvas: Image.Image, y_center: int,
+                              variants: list, tc: dict):
+    """Draw 'AVAILABLE IN: ● NAME ● NAME' dark pill at bottom-left of P1.
+    Only draws if 2+ variants."""
+    if len(variants) < 2:
+        return
+    W, H = canvas.size
+    draw = ImageDraw.Draw(canvas)
+
+    label = "AVAILABLE IN"
+    label_font = load_font_bold(18)
+    name_font = load_font_bold(20)
+    swatch_r = 14       # circle radius
+    gap = 12            # between swatch+name pairs
+    label_gap = 12      # label → first swatch
+    name_gap = 8        # swatch → its name
+    pad_x = 16
+    box_h = 44
+    radius = 22
+
+    label_w, _ = text_size(draw, label, label_font)
+    entries = []
+    for name, rgb in variants:
+        nw, _ = text_size(draw, name, name_font)
+        entries.append((name, rgb, nw))
+    total_w = int(label_w + label_gap
+                  + sum(swatch_r * 2 + name_gap + e[2] for e in entries)
+                  + gap * (len(entries) - 1))
+    box_w = total_w + pad_x * 2
+    # clamp so we don't exceed right edge
+    max_w = W - 70
+    if box_w > max_w:
+        # too wide → downsize fonts would be complex; accept potential overflow gracefully
+        box_w = max_w
+
+    x0 = 35
+    y0 = y_center - box_h // 2
+
+    # bg pill
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    od.rounded_rectangle((x0, y0, x0 + box_w, y0 + box_h),
+                         radius=radius, fill=(0, 0, 0, 140))
+    canvas.alpha_composite(overlay)
+    draw = ImageDraw.Draw(canvas)
+
+    cur_x = x0 + pad_x
+    lh = text_size(draw, label, label_font)[1]
+    draw.text((cur_x, y0 + (box_h - lh) // 2 - 1),
+              label, font=label_font, fill=(255, 255, 255, 180))
+    cur_x += int(label_w) + label_gap
+
+    for name, rgb, nw in entries:
+        cy = y0 + box_h // 2
+        draw.ellipse((cur_x, cy - swatch_r, cur_x + swatch_r * 2, cy + swatch_r),
+                     fill=rgb + (255,), outline=(255, 255, 255, 200), width=2)
+        cur_x += swatch_r * 2 + name_gap
+        nh = text_size(draw, name, name_font)[1]
+        draw.text((cur_x, y0 + (box_h - nh) // 2 - 1),
+                  name, font=name_font, fill=(255, 255, 255, 230))
+        cur_x += int(nw) + gap
+
+
 def _draw_stats_bar(canvas: Image.Image, y_top: int, W: int,
                     bearings: str, gear_ratio: str, max_drag: str, tc: dict,
                     product_type: str = "reel"):
@@ -701,6 +794,7 @@ def _render_product(
     gear_ratio: str = "",
     max_drag: str = "",
     product_type: str = "reel",
+    color_variants: str = "",
 ) -> bytes:
     """Compose a 1000x1000 P1 product card (K + Hybrid Mix design).
 
@@ -901,6 +995,14 @@ def _render_product(
     canvas.alpha_composite(fade)
     draw = ImageDraw.Draw(canvas)
 
+    # ── 11b. Color variant swatch strip (only if 2+ variants) ────────
+    # Placed just above the fade / stats bar, bottom-left.
+    variants = _parse_color_variants(color_variants)
+    if len(variants) >= 2:
+        strip_y = fade_top - 30   # sits above the fade line
+        _draw_color_variant_strip(canvas, strip_y, variants, tc)
+        draw = ImageDraw.Draw(canvas)
+
     # ── 12. Stats bar (P1-B only) ────────────────────────────────────
     # mockup: bottom 44, left/right 14, gap 4, stat-val 19→48, stat-lbl 7→18
     if has_stats:
@@ -949,12 +1051,13 @@ def render_p1(
     gear_ratio:   str = Query(""),
     max_drag:     str = Query(""),
     product_type: str = Query("reel"),
+    color_variants: str = Query(""),
 ):
     png = _render_product(
         _load_hero(key), theme, brand, model,
         chip1, chip2, chip3, chip4, chip5,
         bearings=bearings, gear_ratio=gear_ratio, max_drag=max_drag,
-        product_type=product_type,
+        product_type=product_type, color_variants=color_variants,
     )
     return Response(content=png, media_type="image/png")
 
